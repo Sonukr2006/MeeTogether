@@ -13,10 +13,13 @@ export default function CommentModal() {
       }
     };
 
-    document.addEventListener("mousedown", handleOutsideClick);
+    const listenerTimer = setTimeout(() => {
+      document.addEventListener("click", handleOutsideClick);
+    }, 0);
 
     return () => {
-      document.removeEventListener("mousedown", handleOutsideClick);
+      clearTimeout(listenerTimer);
+      document.removeEventListener("click", handleOutsideClick);
     };
   }, [dispatch]);
 

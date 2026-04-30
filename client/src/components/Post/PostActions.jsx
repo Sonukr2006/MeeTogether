@@ -1,3 +1,11 @@
+import {
+  Bookmark,
+  MessageCircle,
+  Share2,
+  Sparkles,
+  ThumbsUp,
+} from "lucide-react";
+
 export default function PostActions({
   comments,
   liked,
@@ -8,60 +16,58 @@ export default function PostActions({
   onSaveClick,
 }) {
   return (
-    <div className="border-t border-gray-200 pt-3 dark:border-gray-800">
-      <div className="flex items-center justify-between gap-3 text-sm">
-        <div className="flex items-center gap-4">
+    <div className="border-t border-slate-200 pt-3 dark:border-slate-800">
+      <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-4">
           <button
             type="button"
             onClick={onLikeClick}
-            className={`flex items-center gap-1 transition duration-200 hover:scale-105 ${
+            className={`flex items-center gap-1.5 transition duration-200 hover:scale-105 ${
               liked
-                ? "text-pink-500"
-                : "text-gray-500 hover:text-pink-500 dark:text-gray-400"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
             }`}
           >
-            <span>{liked ? "❤️" : "🤍"}</span>
+            <ThumbsUp size={16} fill={liked ? "currentColor" : "none"} />
+            <span>Support</span>
             <span>{likes}</span>
           </button>
 
           <button
             type="button"
             onClick={onCommentClick}
-            className="flex items-center gap-1 text-gray-500 transition duration-200 hover:scale-105 hover:text-blue-500 dark:text-gray-400"
+            className="flex items-center gap-1.5 text-slate-500 transition duration-200 hover:scale-105 hover:text-sky-600 dark:text-slate-400 dark:hover:text-sky-400"
           >
-            <span>💬</span>
+            <MessageCircle size={16} />
             <span>{comments}</span>
           </button>
 
           <button
             type="button"
-            className="flex items-center gap-1 text-gray-500 transition duration-200 hover:scale-105 hover:text-purple-500 dark:text-gray-400"
+            className="flex items-center gap-1.5 text-slate-500 transition duration-200 hover:scale-105 hover:text-sky-600 dark:text-slate-400 dark:hover:text-sky-400"
           >
-            <span>🔗</span>
+            <Share2 size={16} />
             <span>Share</span>
           </button>
 
           <button
             type="button"
             onClick={onSaveClick}
-            className={`flex items-center gap-1 transition duration-200 hover:scale-105 ${
+            className={`flex items-center gap-1.5 transition duration-200 hover:scale-105 ${
               saved
-                ? "text-yellow-400"
-                : "text-gray-500 hover:text-yellow-400 dark:text-gray-400"
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
             }`}
           >
-            <span>{saved ? "🔖" : "📑"}</span>
+            <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
             <span>{saved ? "Saved" : "Save"}</span>
           </button>
         </div>
 
         <div className="flex gap-2">
-          <button className="px-3 py-1 text-xs bg-purple-100 text-purple-600 rounded-lg transition duration-200 hover:scale-105 hover:bg-purple-200">
-            ✨ AI
-          </button>
-
-          <button className="px-3 py-1 text-xs bg-green-500 text-white rounded-lg transition duration-200 hover:scale-105 hover:bg-green-600">
-            🚀 Start
+          <button className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition duration-200 hover:scale-105 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+            <Sparkles size={14} />
+            Analyze
           </button>
         </div>
       </div>

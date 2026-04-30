@@ -1,4 +1,5 @@
 import { useDispatch, useSelector } from "react-redux";
+import { Lightbulb, Sprout } from "lucide-react";
 import CommentModal from "./CommentModal";
 import PostActions from "./PostActions";
 import {
@@ -21,13 +22,13 @@ export default function PostCard({ post }) {
   return (
     <>
       <div
-        className={`relative rounded-2xl border border-gray-800 bg-white p-4 mb-6 shadow-md transition duration-200 dark:bg-gray-900 dark:text-white dark:border-gray-700 ${
+        className={`relative rounded-lg border border-slate-200 bg-white p-4 mb-6 shadow-sm transition duration-200 dark:border-slate-800 dark:bg-slate-900 dark:text-white ${
           showComments
-            ? "z-40 shadow-xl"
-            : "z-0 hover:-translate-y-1 hover:shadow-xl"
+            ? "z-40 shadow-lg"
+            : "z-0 hover:-translate-y-1 hover:shadow-md"
         }`}
       >
-        {/* 👤 User Info */}
+        {/* User Info */}
         <div className="flex items-center gap-3 mb-3">
           <img
             src={post.user.avatar}
@@ -38,42 +39,49 @@ export default function PostCard({ post }) {
             <h3 className="font-semibold text-sm">{post.user.name}</h3>
             <p className="text-xs text-gray-500">{post.user.bio}</p>
           </div>
-          <span className="ml-auto text-xs text-gray-400">{post.time}</span>
-          <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
-            💡 Idea
+          <span className="ml-auto text-xs text-slate-400">{post.time}</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+            <Sprout size={12} />
+            Idea
           </span>
         </div>
 
-        {/* 💡 Title */}
-        <h2 className="text-xl font-semibold mb-2">💡 {post.title}</h2>
+        {/* Title */}
+        <h2 className="mb-2 flex items-start gap-2 text-lg font-semibold text-slate-950 dark:text-slate-50">
+          <Lightbulb
+            size={19}
+            className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+          />
+          <span>{post.title}</span>
+        </h2>
 
-        {/* 📝 Description */}
-        <p className="text-gray-400 text-sm mb-3 line-clamp-3">
+        {/* Description */}
+        <p className="text-slate-600 text-sm mb-3 line-clamp-3 dark:text-slate-300">
           {post.description}
         </p>
 
-        {/* 🖼️ Image */}
+        {/* Image */}
         {post.image && (
           <img
             src={post.image}
             alt="post"
-            className="w-full h-56 object-cover rounded-xl mb-3"
+            className="w-full h-56 object-cover rounded-lg mb-3"
           />
         )}
 
-        {/* 🏷️ Tags */}
+        {/* Tags */}
         <div className="flex flex-wrap gap-2 mb-3">
           {post.tags.map((tag, i) => (
             <span
               key={i}
-              className="text-xs bg-gray-100 px-2 py-1 rounded-full dark:bg-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition"
+              className="cursor-pointer rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600 transition hover:bg-emerald-50 hover:text-emerald-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
             >
               #{tag}
             </span>
           ))}
         </div>
 
-        {/* ⚡ Actions */}
+        {/* Actions */}
         <div className="relative">
           <PostActions
             comments={post.comments}
