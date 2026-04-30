@@ -1,5 +1,28 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
 
+@layer base {
+  html {
+    @apply bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  body {
+    @apply m-0 bg-slate-100 text-slate-900 antialiased transition-colors dark:bg-slate-950 dark:text-slate-100;
+    font-family: "Segoe UI", sans-serif;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  button {
+    @apply cursor-pointer;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+}
 
 /* :root {
   --text: #6b6375;
