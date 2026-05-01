@@ -1,5 +1,12 @@
 import { useDispatch, useSelector } from "react-redux";
-import { Lightbulb, Sprout } from "lucide-react";
+import {
+  ClipboardCheck,
+  HelpCircle,
+  Lightbulb,
+  Rocket,
+  Sprout,
+  Wrench,
+} from "lucide-react";
 import CommentModal from "./CommentModal";
 import PostActions from "./PostActions";
 import {
@@ -18,6 +25,34 @@ export default function PostCard({ post }) {
   const saved = Boolean(savedPosts[post.id]);
   const showComments = activeCommentsPostId === post.id;
   const likes = liked ? post.likes + 1 : post.likes;
+  const typeStyles = {
+    "Build Log": {
+      icon: Wrench,
+      classes:
+        "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300",
+    },
+    "Help Needed": {
+      icon: HelpCircle,
+      classes:
+        "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300",
+    },
+    "Mentor Review": {
+      icon: ClipboardCheck,
+      classes:
+        "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300",
+    },
+    Launch: {
+      icon: Rocket,
+      classes:
+        "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
+    },
+  };
+  const postType = typeStyles[post.type] || {
+    icon: Sprout,
+    classes:
+      "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
+  };
+  const TypeIcon = postType.icon;
 
   return (
     <>
@@ -40,9 +75,11 @@ export default function PostCard({ post }) {
             <p className="text-xs text-gray-500">{post.user.bio}</p>
           </div>
           <span className="ml-auto text-xs text-slate-400">{post.time}</span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-            <Sprout size={12} />
-            Idea
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${postType.classes}`}
+          >
+            <TypeIcon size={12} />
+            {post.type || "Idea"}
           </span>
         </div>
 
@@ -59,6 +96,13 @@ export default function PostCard({ post }) {
         <p className="text-slate-600 text-sm mb-3 line-clamp-3 dark:text-slate-300">
           {post.description}
         </p>
+
+        {post.linkedProject && (
+          <div className="mb-3 inline-flex max-w-full items-center gap-1.5 rounded-md border border-emerald-100 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300">
+            <Rocket size={13} className="shrink-0" />
+            <span className="truncate">Linked project: {post.linkedProject}</span>
+          </div>
+        )}
 
         {/* Image */}
         {post.image && (
