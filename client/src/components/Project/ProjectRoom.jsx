@@ -54,7 +54,7 @@ export default function ProjectRoom() {
           <img
             src={project.image}
             alt={project.title}
-            className="h-56 w-full object-cover"
+            className="h-72 w-full object-cover"
           />
         )}
         <div className="p-5">
@@ -70,7 +70,14 @@ export default function ProjectRoom() {
               </p>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to={`/discussions?projectId=${project.id}`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                <MessageCircle size={14} />
+                Open discussion
+              </Link>
               <a
                 href={project.github}
                 target="_blank"
@@ -218,23 +225,19 @@ export default function ProjectRoom() {
         <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <h2 className="flex items-center gap-2 text-base font-semibold">
             <MessageCircle size={17} className="text-emerald-600 dark:text-emerald-400" />
-            Discussion
+            Discussion handoff
           </h2>
-          <div className="mt-4 space-y-3">
-            {project.discussions.map((discussion) => (
-              <div
-                key={discussion.id}
-                className="rounded-lg bg-slate-50 p-3 dark:bg-slate-950"
-              >
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <p className="text-sm font-semibold">{discussion.author}</p>
-                  <span className="text-xs text-slate-400">{discussion.role}</span>
-                </div>
-                <p className="text-sm text-slate-600 dark:text-slate-300">
-                  {discussion.message}
-                </p>
-              </div>
-            ))}
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+            <p className="text-sm leading-6 text-slate-600 dark:text-slate-300">
+              Project conversations now live in the shared Discussions tab so every build room uses one consistent chat surface.
+            </p>
+            <Link
+              to={`/discussions?projectId=${project.id}`}
+              className="mt-4 inline-flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-emerald-700"
+            >
+              <MessageCircle size={14} />
+              Continue in Discussions
+            </Link>
           </div>
         </section>
       </div>
