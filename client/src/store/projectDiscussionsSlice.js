@@ -4,6 +4,8 @@ import { projects } from "../data/projects";
 const createInitialState = () => {
   const threadsByProject = {};
   const activeThreadByProject = {};
+  const nowLabel = () =>
+    new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
   projects.forEach((project) => {
     const messages = (project.discussions || []).map((discussion) => ({
@@ -11,6 +13,7 @@ const createInitialState = () => {
       author: discussion.author,
       role: discussion.role,
       message: discussion.message,
+      sentAt: nowLabel(),
     }));
 
     if (messages.length > 0) {
@@ -60,6 +63,10 @@ const ensureProjectThread = (state, projectId, projectTitle, authorName) => {
           author: authorName,
           role: "Student Builder",
           message: `Started a new discussion room for ${projectTitle}.`,
+          sentAt: new Date().toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit",
+          }),
         },
       ],
     },
@@ -97,6 +104,10 @@ const projectDiscussionsSlice = createSlice({
         author,
         role,
         message,
+        sentAt: new Date().toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
       });
       thread.lastActivity = "Just now";
     },

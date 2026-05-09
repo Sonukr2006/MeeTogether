@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { Link } from "react-router-dom";
 import {
   Bookmark,
@@ -11,21 +11,31 @@ import {
   Users,
 } from "lucide-react";
 import { ensureDiscussionThread } from "../../store/projectDiscussionsSlice";
+import {
+  openAnalyzePanel,
+  toggleProjectLike,
+  toggleProjectSave,
+} from "../../store/projectInteractionsSlice";
 import CardMetaRow from "../ui/CardMetaRow";
 import ExpandableText from "../ui/ExpandableText";
 import ProjectDetailsPanel from "../ui/ProjectDetailsPanel";
+import ProjectInsightsPanel from "../ui/ProjectInsightsPanel";
 import SignalGrid from "../ui/SignalGrid";
 import TagList from "../ui/TagList";
 import UserMiniProfile from "../ui/UserMiniProfile";
 
 export default function ProjectCard({ project }) {
   const dispatch = useDispatch();
-  const [liked, setLiked] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const { activeAnalyzeProjectId, likedProjects, savedProjects } = useSelector(
+    (state) => state.projectInteractions
+  );
   const [showAllTags, setShowAllTags] = useState(false);
   const [activeDetailModal, setActiveDetailModal] = useState(null);
   const visibleTags = showAllTags ? project.tags : project.tags.slice(0, 3);
   const extraTagCount = Math.max(project.tags.length - 3, 0);
+  const liked = Boolean(likedProjects[project.id]);
+  const saved = Boolean(savedProjects[project.id]);
+  const showAnalyzePanel = activeAnalyzeProjectId === project.id;
 
   const roomSignals = [
     { label: `${project.progress}% shipped`, icon: Rocket },
@@ -92,6 +102,12 @@ export default function ProjectCard({ project }) {
         stackItems={project.techStack}
       />
 
+      {showAnalyzePanel && (
+        <div className="mb-4">
+          <ProjectInsightsPanel project={project} />
+        </div>
+      )}
+
       {project.image && (
         <img
           src={project.image}
@@ -119,7 +135,7 @@ export default function ProjectCard({ project }) {
           <div className="flex flex-wrap items-center gap-4 border-t border-slate-200 pt-3 text-sm dark:border-slate-800">
             <button
               type="button"
-              onClick={() => setLiked((value) => !value)}
+              onClick={() => dispatch(toggleProjectLike(project.id))}
               className={`inline-flex items-center gap-1.5 transition hover:text-emerald-600 dark:hover:text-emerald-400 ${
                 liked
                   ? "text-emerald-600 dark:text-emerald-400"
@@ -132,7 +148,7 @@ export default function ProjectCard({ project }) {
 
             <button
               type="button"
-              onClick={() => setSaved((value) => !value)}
+              onClick={() => dispatch(toggleProjectSave(project.id))}
               className={`inline-flex items-center gap-1.5 transition hover:text-emerald-600 dark:hover:text-emerald-400 ${
                 saved
                   ? "text-emerald-600 dark:text-emerald-400"
@@ -145,10 +161,11 @@ export default function ProjectCard({ project }) {
 
             <button
               type="button"
+              onClick={() => dispatch(openAnalyzePanel(project.id))}
               className="inline-flex items-center gap-1.5 text-slate-500 transition hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
             >
               <Sparkles size={16} />
-              <span>Analyze</span>
+              <span>{showAnalyzePanel ? "Analyzed" : "Analyze"}</span>
             </button>
           </div>
 

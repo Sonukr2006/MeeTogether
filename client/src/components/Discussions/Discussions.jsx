@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useSearchParams } from "react-router-dom";
-import { MessageCircle, Send, Target } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  Hash,
+  MessageCircle,
+  Search,
+  Send,
+  Target,
+  Users,
+} from "lucide-react";
 import { projects } from "../../data/projects";
 import {
   addDiscussionMessage,
@@ -13,6 +22,8 @@ const Discussions = () => {
   const dispatch = useDispatch();
   const [searchParams, setSearchParams] = useSearchParams();
   const [messageText, setMessageText] = useState("");
+  const [roomQuery, setRoomQuery] = useState("");
+  const [showMobileInbox, setShowMobileInbox] = useState(false);
   const projectIdParam = searchParams.get("projectId");
 
   const threadsByProject = useSelector((state) => state.projectDiscussions.threadsByProject);
@@ -29,10 +40,32 @@ const Discussions = () => {
   }, [projectIdParam]);
 
   const selectedProjectId = String(selectedProject.id);
+  const filteredProjects = useMemo(() => {
+    const query = roomQuery.trim().toLowerCase();
+
+    if (!query) {
+      return projects;
+    }
+
+    return projects.filter((project) => {
+      const searchableText = [
+        project.title,
+        project.problem,
+        project.solution,
+        ...project.techStack,
+        ...project.openRoles,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return searchableText.includes(query);
+    });
+  }, [roomQuery]);
   const selectedThreads = threadsByProject[selectedProjectId] || [];
   const activeThreadId = activeThreadByProject[selectedProjectId];
   const activeThread =
     selectedThreads.find((thread) => thread.id === activeThreadId) || selectedThreads[0];
+  const showThreadList = selectedThreads.length > 1;
 
   useEffect(() => {
     if (!projectIdParam) {
@@ -51,6 +84,7 @@ const Discussions = () => {
 
   const handleProjectSelect = (projectId) => {
     setSearchParams({ projectId: String(projectId) });
+    setShowMobileInbox(false);
   };
 
   const handleMessageSubmit = (event) => {
@@ -74,7 +108,7 @@ const Discussions = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 text-slate-900 dark:text-slate-100">
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <section className="hidden rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900 md:block">
         <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
           Shared collaboration surface
         </p>
@@ -84,118 +118,320 @@ const Discussions = () => {
         </p>
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
-        <aside className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex items-center gap-2">
-            <Target size={17} className="text-emerald-600 dark:text-emerald-400" />
-            <h2 className="text-base font-semibold">Build rooms</h2>
+      <div className="grid gap-5 lg:grid-cols-[minmax(240px,0.34fr)_minmax(0,1fr)] xl:grid-cols-[minmax(260px,0.3fr)_minmax(0,1fr)]">
+        <aside className="hidden h-full space-y-4 rounded-lg border border-slate-200 bg-slate-100 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-950 lg:block">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Target size={17} className="text-emerald-600 dark:text-emerald-400" />
+              <h2 className="text-base font-semibold">Build rooms</h2>
+            </div>
+            <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+              {filteredProjects.length}
+            </span>
+          </div>
+          <div className="relative">
+            <Search
+              size={15}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+            />
+            <input
+              value={roomQuery}
+              onChange={(event) => setRoomQuery(event.target.value)}
+              placeholder="Search build rooms"
+              className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            />
           </div>
           <div className="space-y-2">
-            {projects.map((project) => (
-              <button
-                key={project.id}
-                type="button"
-                onClick={() => handleProjectSelect(project.id)}
-                className={`w-full rounded-lg border p-3 text-left transition ${
-                  String(project.id) === selectedProjectId
-                    ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10"
-                    : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-800"
-                }`}
-              >
-                <p className="text-sm font-semibold">{project.title}</p>
-                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  {project.openRoles.length} roles open
+            {filteredProjects.length > 0 ? (
+              filteredProjects.map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => handleProjectSelect(project.id)}
+                  className={`w-full rounded-lg border p-3 text-left transition ${
+                    String(project.id) === selectedProjectId
+                      ? "border-emerald-200 bg-white dark:border-emerald-500/20 dark:bg-slate-900"
+                      : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <p className="text-sm font-semibold">{project.title}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                    <span className="rounded-md bg-white px-2 py-1 dark:bg-slate-900">
+                      {project.openRoles.length} roles open
+                    </span>
+                    <span className="rounded-md bg-white px-2 py-1 dark:bg-slate-900">
+                      {project.techStack.length} stack tags
+                    </span>
+                  </div>
+                </button>
+              ))
+            ) : (
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  No build rooms found.
                 </p>
-              </button>
-            ))}
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Try searching by room title, stack, or role.
+                </p>
+              </div>
+            )}
           </div>
         </aside>
 
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 dark:border-slate-800 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                Active room
-              </p>
-              <h2 className="mt-1 text-xl font-semibold">{selectedProject.title}</h2>
-              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                {activeThread
-                  ? `Joined existing chat created by ${activeThread.createdBy}`
-                  : "This room will create a fresh discussion thread on the first message."}
-              </p>
-            </div>
-            <Link
-              to={`/projects/${selectedProject.id}`}
-              className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              <MessageCircle size={14} />
-              Open build room
-            </Link>
-          </div>
-
-          <div className="mt-4 grid gap-4 lg:grid-cols-[240px_1fr]">
-            <div className="space-y-2">
-              {selectedThreads.map((thread) => (
-                <button
-                  key={thread.id}
-                  type="button"
-                  onClick={() =>
-                    dispatch(
-                      setActiveDiscussionThread({
-                        projectId: selectedProject.id,
-                        threadId: thread.id,
-                      })
-                    )
-                  }
-                  className={`w-full rounded-lg border p-3 text-left transition ${
-                    activeThread?.id === thread.id
-                      ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10"
-                      : "border-slate-200 bg-slate-50 hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:hover:bg-slate-800"
-                  }`}
-                >
-                  <p className="text-sm font-semibold">{thread.title}</p>
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    {thread.lastActivity}
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-[#313338] dark:text-slate-100">
+          <div className="flex min-h-[calc(100vh-11rem)] flex-col md:min-h-[680px]">
+            <div className="border-b border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-[#2b2d31] lg:hidden">
+              <button
+                type="button"
+                onClick={() => setShowMobileInbox((value) => !value)}
+                className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left dark:border-slate-700 dark:bg-[#383a40]"
+              >
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Inbox
                   </p>
-                </button>
-              ))}
+                  <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    {selectedProject.title}
+                  </p>
+                </div>
+                {showMobileInbox ? (
+                  <ChevronUp size={16} className="shrink-0 text-slate-400" />
+                ) : (
+                  <ChevronDown size={16} className="shrink-0 text-slate-400" />
+                )}
+              </button>
             </div>
 
-            <div>
-              <div className="space-y-3">
-                {(activeThread?.messages || []).map((discussion) => (
-                  <div
-                    key={discussion.id}
-                    className="rounded-lg bg-slate-50 p-3 dark:bg-slate-950"
-                  >
-                    <div className="mb-1 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold">{discussion.author}</p>
-                      <span className="text-xs text-slate-400">{discussion.role}</span>
-                    </div>
-                    <p className="text-sm text-slate-600 dark:text-slate-300">
-                      {discussion.message}
-                    </p>
-                  </div>
-                ))}
-              </div>
-
-              <form onSubmit={handleMessageSubmit} className="mt-4 flex gap-2">
-                <input
-                  value={messageText}
-                  onChange={(event) => setMessageText(event.target.value)}
-                  placeholder={`Message ${selectedProject.title} discussion`}
-                  className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
-                />
+            {showMobileInbox && (
+              <>
                 <button
-                  type="submit"
-                  disabled={!messageText.trim()}
-                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700"
-                  aria-label="Send discussion message"
-                  title="Send"
+                  type="button"
+                  aria-label="Close inbox overlay"
+                  className="fixed inset-0 z-40 bg-slate-950/35 backdrop-blur-[1px] lg:hidden"
+                  onClick={() => setShowMobileInbox(false)}
+                />
+                <div className="fixed inset-x-3 top-32 z-50 rounded-xl border border-slate-200 bg-white p-3 shadow-2xl dark:border-slate-700 dark:bg-[#2b2d31] lg:hidden">
+                  <div className="relative">
+                    <Search
+                      size={15}
+                      className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    />
+                    <input
+                      value={roomQuery}
+                      onChange={(event) => setRoomQuery(event.target.value)}
+                      placeholder="Search build rooms"
+                      className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 dark:border-slate-700 dark:bg-[#383a40] dark:text-slate-100"
+                    />
+                  </div>
+
+                  <div className="mt-3 space-y-2">
+                    {filteredProjects.map((project) => (
+                      <button
+                        key={project.id}
+                        type="button"
+                        onClick={() => handleProjectSelect(project.id)}
+                        className={`block w-full rounded-lg border px-3 py-2 text-left transition ${
+                          String(project.id) === selectedProjectId
+                            ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10"
+                            : "border-slate-200 bg-white dark:border-slate-700 dark:bg-[#383a40]"
+                        }`}
+                      >
+                        <p className="text-sm font-semibold">{project.title}</p>
+                        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                          {project.openRoles.length} roles open
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+
+                  {showThreadList ? (
+                    <div className="mt-3 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                      {selectedThreads.map((thread) => (
+                        <button
+                          key={thread.id}
+                          type="button"
+                          onClick={() => {
+                            dispatch(
+                              setActiveDiscussionThread({
+                                projectId: selectedProject.id,
+                                threadId: thread.id,
+                              })
+                            );
+                            setShowMobileInbox(false);
+                          }}
+                          className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                            activeThread?.id === thread.id
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+                              : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#383a40] dark:text-slate-300"
+                          }`}
+                        >
+                          {thread.title}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            )}
+
+            <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 dark:border-slate-800 dark:bg-[#2b2d31]">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Hash size={16} className="text-slate-400 dark:text-slate-500" />
+                  <h2 className="truncate text-lg font-semibold">{selectedProject.title}</h2>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  {activeThread
+                    ? `Created by ${activeThread.createdBy} · ${activeThread.messages.length} messages`
+                    : "Start the channel conversation."}
+                </p>
+              </div>
+              <Link
+                to={`/projects/${selectedProject.id}`}
+                className="inline-flex shrink-0 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-[#404249] dark:text-slate-200 dark:hover:bg-[#4a4d55]"
+              >
+                <MessageCircle size={14} />
+                Open build room
+              </Link>
+            </div>
+
+            <div
+              className={`grid min-h-0 flex-1 gap-0 ${
+                showThreadList
+                  ? "lg:grid-cols-[minmax(220px,0.34fr)_minmax(0,1fr)]"
+                  : "lg:grid-cols-1"
+              }`}
+            >
+              {showThreadList ? (
+                <div className="hidden border-b border-slate-200 bg-slate-100 p-3 dark:border-slate-800 dark:bg-[#2b2d31] lg:block lg:border-b-0 lg:border-r">
+                  <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <Users size={14} className="text-slate-400 dark:text-slate-500" />
+                    Channels
+                  </div>
+                  <div className="space-y-2">
+                    {selectedThreads.map((thread) => (
+                      <button
+                        key={thread.id}
+                        type="button"
+                        onClick={() =>
+                          dispatch(
+                            setActiveDiscussionThread({
+                              projectId: selectedProject.id,
+                              threadId: thread.id,
+                            })
+                        )
+                      }
+                      className={`w-full rounded-lg border p-3 text-left transition ${
+                        activeThread?.id === thread.id
+                          ? "border-emerald-200 bg-white dark:border-emerald-500/20 dark:bg-[#404249]"
+                          : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-transparent dark:hover:bg-[#35373c]"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="flex items-center gap-1.5 text-sm font-semibold">
+                          <Hash size={13} className="text-slate-400 dark:text-slate-500" />
+                          {thread.title}
+                        </p>
+                        <span className="text-[11px] text-slate-400">{thread.lastActivity}</span>
+                      </div>
+                        <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                          <Users size={12} />
+                          <span>{thread.messages.length} updates</span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex min-h-0 flex-col">
+                <div className="min-h-0 flex-1 bg-slate-50/70 px-3 py-4 dark:bg-[#313338]">
+                  <div className="w-full">
+                    <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                      <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                      <span>{selectedProject.contributors.length} builders in room</span>
+                      <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
+                    </div>
+
+                    {(activeThread?.messages || []).length > 0 ? (
+                      <div className="space-y-3">
+                        {(activeThread?.messages || []).map((discussion) => {
+                          const authorInitial = discussion.author.charAt(0).toUpperCase();
+                          const isCurrentUser = discussion.author === "Sonu Kumar";
+
+                          return (
+                            <div
+                              key={discussion.id}
+                              className="flex gap-3 rounded-lg px-2 py-2 transition hover:bg-slate-100/70 dark:hover:bg-[#2e3035]"
+                            >
+                              <div
+                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                                  isCurrentUser
+                                    ? "bg-emerald-600 text-white"
+                                    : "bg-slate-200 text-slate-700 dark:bg-[#404249] dark:text-slate-200"
+                                }`}
+                              >
+                                {authorInitial}
+                              </div>
+
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                                    {discussion.author}
+                                  </p>
+                                  <span className="text-[11px] text-slate-400">
+                                    {discussion.role}
+                                  </span>
+                                  <span className="text-[11px] text-slate-400">
+                                    {discussion.sentAt || activeThread.lastActivity}
+                                  </span>
+                                </div>
+                                <p className="mt-1 max-w-none text-sm leading-7 text-slate-700 dark:text-slate-200">
+                                  {discussion.message}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex h-full items-center justify-center">
+                        <div className="rounded-lg border border-dashed border-slate-200 bg-white p-6 text-center dark:border-slate-800 dark:bg-slate-900">
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                            No discussion messages yet.
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            Start the first conversation for this build room.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <form
+                  onSubmit={handleMessageSubmit}
+                  className="border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-[#2b2d31]"
                 >
-                  <Send size={15} />
-                </button>
-              </form>
+                  <div className="flex w-full gap-2">
+                    <input
+                      value={messageText}
+                      onChange={(event) => setMessageText(event.target.value)}
+                      placeholder={`Message ${selectedProject.title} discussion`}
+                      className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 dark:border-[#3f4147] dark:bg-[#383a40] dark:text-slate-100"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!messageText.trim()}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700"
+                      aria-label="Send discussion message"
+                      title="Send"
+                    >
+                      <Send size={16} />
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
         </section>

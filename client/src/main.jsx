@@ -7,6 +7,8 @@ import App from './routes/App.jsx'
 import SignIn from './components/SignIn/SignIn.jsx'
 import Signup from './components/Signup/Signup.jsx'
 import Discussions from './components/Discussions/Discussions.jsx'
+import Deployments from './components/Deployments/Deployments.jsx'
+import Issues from './components/Issues/Issues.jsx'
 import Profile from './components/Profile/Profile.jsx'
 import Home from './components/Home/Home.jsx'
 import ProjectRoom from './components/Project/ProjectRoom.jsx'
@@ -34,6 +36,14 @@ const router = createBrowserRouter([
       {
         path: '/discussions',
         element: <Discussions />,
+      },
+      {
+        path: '/deployments',
+        element: <Deployments />,
+      },
+      {
+        path: '/issues',
+        element: <Issues />,
       },
       {
         path: '/profile/:userId',

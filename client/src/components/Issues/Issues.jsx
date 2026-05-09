@@ -1,6 +1,17 @@
 import { useMemo, useState } from "react";
-import { AlertCircle, CircleCheckBig, Clock3, Search, Sparkles } from "lucide-react";
+import { useDispatch } from "react-redux";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  AlertCircle,
+  CircleCheckBig,
+  Clock3,
+  MessageCircle,
+  Search,
+  Sparkles,
+  UserPlus,
+} from "lucide-react";
 import { projects } from "../../data/projects";
+import { ensureDiscussionThread } from "../../store/projectDiscussionsSlice";
 
 const STATUS_ORDER = ["Open", "In progress", "Done"];
 
@@ -45,8 +56,11 @@ const allIssues = projects.flatMap((project) =>
 );
 
 export default function Issues() {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("All");
+  const [assignedIssueIds, setAssignedIssueIds] = useState({});
 
   const filteredIssues = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -76,6 +90,24 @@ export default function Issues() {
     status,
     items: filteredIssues.filter((issue) => issue.status === status),
   }));
+
+  const handleDiscuss = (issue) => {
+    dispatch(
+      ensureDiscussionThread({
+        authorName: "Sonu Kumar",
+        projectId: issue.projectId,
+        projectTitle: issue.projectTitle,
+      })
+    );
+    navigate(`/discussions?projectId=${issue.projectId}`);
+  };
+
+  const handleAssignToggle = (issueId) => {
+    setAssignedIssueIds((current) => ({
+      ...current,
+      [issueId]: !current[issueId],
+    }));
+  };
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 text-slate-900 dark:text-slate-100">
@@ -203,6 +235,36 @@ export default function Issues() {
                       <div className="mt-3 inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400">
                         <Sparkles size={12} />
                         {issue.mentorStatus}
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleDiscuss(issue)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
+                        >
+                          <MessageCircle size={14} />
+                          Discuss
+                        </button>
+                        <Link
+                          to={`/projects/${issue.projectId}`}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-sky-500/30 dark:hover:bg-sky-500/10 dark:hover:text-sky-300"
+                        >
+                          <Sparkles size={14} />
+                          Open project
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleAssignToggle(issue.id)}
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-2 text-xs font-semibold transition ${
+                            assignedIssueIds[issue.id]
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-violet-500/30 dark:hover:bg-violet-500/10 dark:hover:text-violet-300"
+                          }`}
+                        >
+                          <UserPlus size={14} />
+                          {assignedIssueIds[issue.id] ? "Assigned to you" : "Assign"}
+                        </button>
                       </div>
                     </article>
                   ))

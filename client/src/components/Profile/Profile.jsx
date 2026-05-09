@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { useDispatch } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Award,
+  BookmarkCheck,
   BriefcaseBusiness,
   CheckCircle2,
   Clock3,
@@ -21,6 +22,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
+import { projects } from "../../data/projects";
 import { proofProfile } from "../../data/proofProfile";
 import { addRequestFromProfileAction } from "../../store/opportunityRequestsSlice";
 
@@ -44,6 +46,8 @@ const Profile = () => {
   const [activeAction, setActiveAction] = useState(null);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { savedProjects } = useSelector((state) => state.projectInteractions);
+  const savedProjectList = projects.filter((project) => savedProjects[project.id]);
 
   const closeAction = () => setActiveAction(null);
   const ActiveActionIcon = activeAction
@@ -282,6 +286,70 @@ const Profile = () => {
                 </article>
               ))}
             </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Saved projects
+                </p>
+                <h2 className="mt-1 text-xl font-semibold">Build rooms you bookmarked</h2>
+              </div>
+              <BookmarkCheck className="text-emerald-600 dark:text-emerald-400" size={22} />
+            </div>
+
+            {savedProjectList.length > 0 ? (
+              <div className="mt-4 space-y-3">
+                {savedProjectList.map((project) => (
+                  <article
+                    key={project.id}
+                    className="rounded-lg border border-slate-200 p-4 dark:border-slate-800"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold">{project.title}</h3>
+                          <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                            {project.progress}% shipped
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                          {project.solution}
+                        </p>
+                      </div>
+                      <Link
+                        to={`/projects/${project.id}`}
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
+                      >
+                        <ExternalLink size={14} />
+                        View
+                      </Link>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {project.techStack.slice(0, 4).map((tech) => (
+                        <span
+                          key={tech}
+                          className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                        >
+                          {tech}
+                        </span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  No saved build rooms yet.
+                </p>
+                <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                  Save interesting projects from the feed and they will show up here for quick access.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
