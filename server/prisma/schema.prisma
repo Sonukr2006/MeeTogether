@@ -1,0 +1,328 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum AccountState {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+}
+
+enum IssueStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum IssuePriority {
+  HIGH
+  MEDIUM
+  NORMAL
+}
+
+enum DeploymentStatus {
+  LIVE
+  PREVIEW
+  QUEUED
+}
+
+model User {
+  id                          String         @id @default(cuid())
+  name                        String
+  username                    String         @unique
+  email                       String         @unique
+  passwordHash                String
+  avatar                      String?
+  bio                         String?
+  title                       String?
+  location                    String?
+  openTo                      String[]
+  accountState                AccountState   @default(PENDING_VERIFICATION)
+  emailVerified               Boolean        @default(false)
+  emailVerificationTokenHash  String?
+  emailVerificationExpiresAt  DateTime?
+  passwordResetTokenHash      String?
+  passwordResetExpiresAt      DateTime?
+  createdAt                   DateTime       @default(now())
+  updatedAt                   DateTime       @updatedAt
+  sessions                    Session[]
+  proofProfile                ProofProfile?
+  ownedProjects               Project[]      @relation("OwnedProjects")
+  projectMemberships          ProjectMember[]
+  sentRequests                Request[]      @relation("SentRequests")
+  receivedRequests            Request[]      @relation("ReceivedRequests")
+  createdDiscussionThreads    DiscussionThread[] @relation("CreatedDiscussionThreads")
+  discussionMessages          DiscussionMessage[]
+  threadParticipantStates     ThreadParticipantState[]
+  createdIssues               Issue[]           @relation("CreatedIssues")
+  assignedIssues              Issue[]           @relation("AssignedIssues")
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String
+  tokenFamilyId    String
+  userAgent        String?
+  ipAddress        String?
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  lastUsedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenFamilyId])
+}
+
+model ProofProfile {
+  id                     String   @id @default(cuid())
+  userId                 String   @unique
+  headline               String?
+  summary                String?
+  proofScore             Int      @default(0)
+  builderLevel           String?
+  rankLabel              String?
+  shippedProjectsCount   Int      @default(0)
+  completedTasksCount    Int      @default(0)
+  verifiedSkillsCount    Int      @default(0)
+  mentorReviewsCount     Int      @default(0)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links                  ProfileLink[]
+  trustSignals           ProfileTrustSignal[]
+  skills                 ProfileSkill[]
+}
+
+model ProfileLink {
+  id             String       @id @default(cuid())
+  proofProfileId String
+  label          String
+  value          String
+  iconKey        String?
+  sortOrder      Int          @default(0)
+  proofProfile   ProofProfile @relation(fields: [proofProfileId], references: [id], onDelete: Cascade)
+
+  @@index([proofProfileId, sortOrder])
+}
+
+model ProfileTrustSignal {
+  id             String       @id @default(cuid())
+  proofProfileId String
+  label          String
+  detail         String
+  iconKey        String?
+  sortOrder      Int          @default(0)
+  proofProfile   ProofProfile @relation(fields: [proofProfileId], references: [id], onDelete: Cascade)
+
+  @@index([proofProfileId, sortOrder])
+}
+
+model ProfileSkill {
+  id             String       @id @default(cuid())
+  proofProfileId String
+  name           String
+  evidence       String?
+  level          Int?
+  sortOrder      Int          @default(0)
+  proofProfile   ProofProfile @relation(fields: [proofProfileId], references: [id], onDelete: Cascade)
+
+  @@index([proofProfileId, sortOrder])
+}
+
+model Project {
+  id            String          @id @default(cuid())
+  ownerUserId   String
+  title         String
+  problem       String
+  solution      String
+  image         String?
+  progress      Int             @default(0)
+  visibility    String          @default("public")
+  difficulty    String?
+  timeline      String?
+  mentorStatus  String?
+  githubUrl     String?
+  demoUrl       String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  owner         User            @relation("OwnedProjects", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members       ProjectMember[]
+  techTags      ProjectTechTag[]
+  openRoles     ProjectOpenRole[]
+  tags          ProjectTag[]
+  discussionThreads DiscussionThread[]
+  relatedRequests Request[]       @relation("RequestRelatedProject")
+  issues        Issue[]
+  deployments   Deployment[]
+
+  @@index([ownerUserId])
+}
+
+model Issue {
+  id               String        @id @default(cuid())
+  projectId        String
+  createdByUserId  String
+  assignedToUserId String?
+  title            String
+  description      String?
+  status           IssueStatus   @default(OPEN)
+  priority         IssuePriority @default(NORMAL)
+  roleNeed         String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  project          Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy        User          @relation("CreatedIssues", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  assignedTo       User?         @relation("AssignedIssues", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, status])
+  @@index([assignedToUserId])
+}
+
+model DiscussionThread {
+  id             String    @id @default(cuid())
+  projectId      String
+  title          String
+  kind           String    @default("default")
+  createdByUserId String
+  lastMessageAt  DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy      User      @relation("CreatedDiscussionThreads", fields: [createdByUserId], references: [id], onDelete: Cascade)
+  messages       DiscussionMessage[]
+  participantStates ThreadParticipantState[]
+  relatedRequests Request[] @relation("RequestRelatedThread")
+
+  @@index([projectId])
+  @@index([lastMessageAt])
+}
+
+model DiscussionMessage {
+  id           String    @id @default(cuid())
+  threadId     String
+  authorUserId String
+  message      String
+  editedAt     DateTime?
+  deletedAt    DateTime?
+  sequenceNumber Int
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  thread       DiscussionThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  author       User      @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
+  @@unique([threadId, sequenceNumber])
+}
+
+model ThreadParticipantState {
+  id                String   @id @default(cuid())
+  threadId          String
+  userId            String
+  lastReadMessageId String?
+  lastReadAt        DateTime?
+  unreadCountSnapshot Int?
+  joinedAt          DateTime @default(now())
+  mutedAt           DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  thread            DiscussionThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([threadId, userId])
+  @@index([userId])
+}
+
+model ProjectMember {
+  id         String   @id @default(cuid())
+  projectId  String
+  userId     String
+  roleLabel  String?
+  joinedAt   DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+model ProjectTechTag {
+  id        String   @id @default(cuid())
+  projectId String
+  value     String
+  sortOrder Int      @default(0)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, sortOrder])
+}
+
+model ProjectOpenRole {
+  id        String   @id @default(cuid())
+  projectId String
+  value     String
+  sortOrder Int      @default(0)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, sortOrder])
+}
+
+model ProjectTag {
+  id        String   @id @default(cuid())
+  projectId String
+  value     String
+  sortOrder Int      @default(0)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, sortOrder])
+}
+
+model Request {
+  id               String    @id @default(cuid())
+  fromUserId       String
+  toUserId         String
+  type             String
+  title            String
+  status           String
+  message          String?
+  relatedProjectId String?
+  relatedThreadId  String?
+  unread           Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  fromUser         User      @relation("SentRequests", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser           User      @relation("ReceivedRequests", fields: [toUserId], references: [id], onDelete: Cascade)
+  relatedProject   Project?  @relation("RequestRelatedProject", fields: [relatedProjectId], references: [id], onDelete: SetNull)
+  relatedThread    DiscussionThread? @relation("RequestRelatedThread", fields: [relatedThreadId], references: [id], onDelete: SetNull)
+
+  @@index([fromUserId])
+  @@index([toUserId])
+  @@index([relatedProjectId])
+  @@index([relatedThreadId])
+}
+
+model Deployment {
+  id             String           @id @default(cuid())
+  projectId      String
+  status         DeploymentStatus @default(QUEUED)
+  environment    String
+  liveUrl        String?
+  repoUrl        String?
+  progress       Int              @default(0)
+  buildHealth    String?
+  currentFocus   String?
+  note           String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([status])
+}
