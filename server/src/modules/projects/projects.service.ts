@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TtlCache } from 'src/common/utils/ttl-cache';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { CreateProjectDto } from './dto/create-project.dto';
 
 const projectInclude = {
   owner: {
@@ -87,6 +88,103 @@ export class ProjectsService {
     return summaries;
   }
 
+  async createProject(userId: string, createProjectDto: CreateProjectDto) {
+    const techStack = this.normalizeStringArray(createProjectDto.techStack);
+    const openRoles = this.normalizeStringArray(createProjectDto.openRoles);
+
+    const created = await this.prisma.$transaction(async (tx) => {
+      const project = await tx.project.create({
+        data: {
+          ownerUserId: userId,
+          title: createProjectDto.title.trim(),
+          problem: createProjectDto.problemStatement.trim(),
+          solution: createProjectDto.solutionApproach.trim(),
+          image: createProjectDto.imageUrl?.trim() || null,
+          progress: 0,
+          visibility: createProjectDto.visibility ?? 'public',
+          difficulty: createProjectDto.difficulty?.trim() || null,
+          timeline: createProjectDto.timeline?.trim() || null,
+          mentorStatus: createProjectDto.mentorStatus?.trim() || null,
+          githubUrl: createProjectDto.githubUrl?.trim() || null,
+          demoUrl: createProjectDto.demoUrl?.trim() || null,
+        },
+      });
+
+      await tx.projectMember.create({
+        data: {
+          projectId: project.id,
+          userId,
+          roleLabel: 'Owner',
+        },
+      });
+
+      if (techStack.length > 0) {
+        await tx.projectTechTag.createMany({
+          data: techStack.map((value, index) => ({
+            projectId: project.id,
+            value,
+            sortOrder: index + 1,
+          })),
+        });
+      }
+
+      if (openRoles.length > 0) {
+        await tx.projectOpenRole.createMany({
+          data: openRoles.map((value, index) => ({
+            projectId: project.id,
+            value,
+            sortOrder: index + 1,
+          })),
+        });
+      }
+
+      const defaultThread = await tx.discussionThread.create({
+        data: {
+          projectId: project.id,
+          title: `${project.title} discussion`,
+          kind: 'default',
+          createdByUserId: userId,
+        },
+      });
+
+      await tx.threadParticipantState.create({
+        data: {
+          threadId: defaultThread.id,
+          userId,
+        },
+      });
+
+      const createdProject = await tx.project.findUniqueOrThrow({
+        where: { id: project.id },
+        include: {
+          owner: projectInclude.owner,
+          techTags: projectInclude.techTags,
+          openRoles: projectInclude.openRoles,
+          tags: projectInclude.tags,
+          _count: {
+            select: {
+              members: true,
+            },
+          },
+        },
+      });
+
+      return {
+        id: project.id,
+        title: project.title,
+        defaultThreadId: defaultThread.id,
+        project: this.toProjectSummary(
+          createdProject as ProjectWithRelations & { _count: { members: number } },
+        ),
+      };
+    });
+
+    this.projectsListCache.clear();
+    this.projectDetailCache.clear(created.id);
+
+    return created;
+  }
+
   async getProjectById(projectId: string) {
     const cached = this.projectDetailCache.get(projectId);
     if (cached) {
@@ -157,5 +255,21 @@ export class ProjectsService {
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
+  }
+
+  private normalizeStringArray(values?: string[]) {
+    const seen = new Set<string>();
+
+    return (values ?? [])
+      .map((value) => value.trim())
+      .filter((value) => value.length > 0)
+      .filter((value) => {
+        const normalized = value.toLowerCase();
+        if (seen.has(normalized)) {
+          return false;
+        }
+        seen.add(normalized);
+        return true;
+      });
   }
 }
