@@ -35,6 +35,7 @@ const Discussions = () => {
   );
   const projectIdParam = searchParams.get("projectId");
   const currentUser = useSelector((state) => state.auth.currentUser);
+  const accessToken = useSelector((state) => state.auth.accessToken);
   const projectItems = useSelector((state) => state.projects.items);
   const projectsStatus = useSelector((state) => state.projects.status);
 
@@ -189,10 +190,18 @@ const Discussions = () => {
             })),
           }));
 
-          if (currentUser?.id) {
-            await apiRequest(`/threads/${activeThread.id}/read`, {
-              method: "POST",
-            });
+          if (currentUser?.id && accessToken) {
+            try {
+              await apiRequest(`/threads/${activeThread.id}/read`, {
+                method: "POST",
+              });
+            } catch (error) {
+              const message = error?.message?.toLowerCase?.() ?? "";
+
+              if (!message.includes("unauthorized")) {
+                throw error;
+              }
+            }
           }
         }
       } catch {
@@ -209,7 +218,7 @@ const Discussions = () => {
     return () => {
       ignore = true;
     };
-  }, [activeThread?.id, currentUser?.id, liveThreads]);
+  }, [accessToken, activeThread?.id, currentUser?.id, liveThreads]);
 
   const handleProjectSelect = (projectId) => {
     setSearchParams({ projectId: String(projectId) });
