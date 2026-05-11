@@ -4,10 +4,33 @@ function getRelativeProjectTime() {
   return "Live";
 }
 
+function getRelativePostTime(createdAt) {
+  if (!createdAt) {
+    return "Recent";
+  }
+
+  const created = new Date(createdAt);
+  const diffMinutes = Math.max(1, Math.floor((Date.now() - created.getTime()) / 60000));
+
+  if (diffMinutes < 60) {
+    return `${diffMinutes}m ago`;
+  }
+
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+}
+
 export function mapApiProjectToCard(project) {
   return {
     ...emptyProjectCard,
+    kind: "project",
     id: project.id,
+    createdAt: project.createdAt,
     user: {
       name: project.owner?.name ?? "Unknown builder",
       username: project.owner?.username ?? "",
@@ -38,6 +61,30 @@ export function mapApiProjectToCard(project) {
     tasks: [],
     milestones: [],
     discussions: [],
+  };
+}
+
+export function mapApiPostToCard(post) {
+  return {
+    kind: "post",
+    id: post.id,
+    createdAt: post.createdAt,
+    type: post.type,
+    time: getRelativePostTime(post.createdAt),
+    title: post.title,
+    description: post.description,
+    image: post.image ?? null,
+    likes: post.likes ?? 0,
+    comments: post.comments ?? 0,
+    tags: post.tags ?? [],
+    linkedProject: post.linkedProject?.title ?? null,
+    linkedProjectId: post.linkedProject?.id ?? null,
+    user: {
+      name: post.user?.name ?? "Unknown builder",
+      username: post.user?.username ?? "",
+      bio: post.user?.bio ?? "Builder",
+      avatar: post.user?.avatar ?? "https://i.pravatar.cc/100?img=12",
+    },
   };
 }
 

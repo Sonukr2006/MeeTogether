@@ -208,6 +208,7 @@ export class ProjectsService {
   private toProjectSummary(project: ProjectWithRelations & { _count?: { members: number } }) {
     return {
       id: project.id,
+      createdAt: project.createdAt,
       title: project.title,
       problem: project.problem,
       solution: project.solution,

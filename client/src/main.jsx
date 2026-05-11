@@ -9,6 +9,7 @@ import Signup from './components/Signup/Signup.jsx'
 import Discussions from './components/Discussions/Discussions.jsx'
 import Deployments from './components/Deployments/Deployments.jsx'
 import Issues from './components/Issues/Issues.jsx'
+import CreatePostPage from './components/CreatePost/CreatePostPage.jsx'
 import CreateProjectPage from './components/CreateProject/CreateProjectPage.jsx'
 import ForgotPassword from './components/Auth/ForgotPassword.jsx'
 import ResetPassword from './components/Auth/ResetPassword.jsx'
@@ -82,6 +83,10 @@ const router = createBrowserRouter([
           {
             path: '/create/project',
             element: <CreateProjectPage />,
+          },
+          {
+            path: '/create/post',
+            element: <CreatePostPage />,
           },
           {
             path: '/requests',

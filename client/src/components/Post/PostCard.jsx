@@ -68,6 +68,14 @@ export default function PostCard({ post }) {
         "from-emerald-500/12 via-emerald-500/6 to-transparent dark:from-emerald-400/12 dark:via-emerald-400/6",
       label: "Shipped milestone",
     },
+    "Professional Update": {
+      icon: Lightbulb,
+      classes:
+        "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600/30 dark:bg-slate-800/70 dark:text-slate-200",
+      accent:
+        "from-slate-500/12 via-slate-500/6 to-transparent dark:from-slate-300/12 dark:via-slate-300/6",
+      label: "Professional signal",
+    },
   };
   const postType = typeStyles[post.type] || {
     icon: Sprout,

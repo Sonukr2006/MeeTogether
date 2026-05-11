@@ -1,4 +1,4 @@
-import { Bell, LogOut, Menu, PlusCircle, User, X } from "lucide-react";
+import { Bell, FileText, FolderPlus, LogOut, Menu, PlusCircle, User, X } from "lucide-react";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, NavLink } from "react-router-dom";
@@ -25,6 +25,7 @@ const Navbar = () => {
   const { showAlert } = useAlert();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
   const currentUser = useSelector((state) => state.auth.currentUser);
   const unreadRequests = useSelector(
     (state) =>
@@ -38,6 +39,10 @@ const Navbar = () => {
 
   const closeLogoutConfirm = () => {
     setIsLogoutConfirmOpen(false);
+  };
+
+  const closeCreateMenu = () => {
+    setIsCreateMenuOpen(false);
   };
 
   const handleLogout = async () => {
@@ -96,13 +101,49 @@ const Navbar = () => {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           {currentUser ? (
-            <Link
-              to="/create/project"
-              className="hidden items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 md:inline-flex"
-            >
-              <PlusCircle size={16} />
-              Create
-            </Link>
+            <div className="relative hidden md:block">
+              <button
+                type="button"
+                onClick={() => setIsCreateMenuOpen((open) => !open)}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                aria-expanded={isCreateMenuOpen}
+                aria-haspopup="menu"
+              >
+                <PlusCircle size={16} />
+                Create
+              </button>
+
+              {isCreateMenuOpen ? (
+                <div className="absolute right-0 top-12 z-40 w-56 rounded-lg border border-slate-200 bg-white p-2 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+                  <Link
+                    to="/create/project"
+                    onClick={closeCreateMenu}
+                    className="flex items-center gap-3 rounded-md px-3 py-3 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    <FolderPlus size={16} />
+                    <div>
+                      <p className="font-semibold">New project</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Start a build room
+                      </p>
+                    </div>
+                  </Link>
+                  <Link
+                    to="/create/post"
+                    onClick={closeCreateMenu}
+                    className="mt-1 flex items-center gap-3 rounded-md px-3 py-3 text-sm text-slate-700 transition hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"
+                  >
+                    <FileText size={16} />
+                    <div>
+                      <p className="font-semibold">New post</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Share a live update
+                      </p>
+                    </div>
+                  </Link>
+                </div>
+              ) : null}
+            </div>
           ) : null}
           <Link
             to={currentUser?.username ? `/profile/${currentUser.username}` : "/sign-in"}
@@ -148,7 +189,10 @@ const Navbar = () => {
       {isMobileMenuOpen && (
         <div
           className="fixed inset-0 z-20 bg-slate-950/35 backdrop-blur-[2px] md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
+          onClick={() => {
+            setIsMobileMenuOpen(false);
+            setIsCreateMenuOpen(false);
+          }}
           aria-hidden="true"
         />
       )}
@@ -195,14 +239,24 @@ const Navbar = () => {
 
         <div className="mt-4 grid grid-cols-2 gap-2">
           {currentUser ? (
-            <Link
-              to="/create/project"
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
-            >
-              <PlusCircle size={16} />
-              Create
-            </Link>
+            <>
+              <Link
+                to="/create/project"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
+              >
+                <FolderPlus size={16} />
+                New Project
+              </Link>
+              <Link
+                to="/create/post"
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 dark:border-sky-500/30 dark:bg-sky-500/10 dark:text-sky-300 dark:hover:bg-sky-500/20"
+              >
+                <FileText size={16} />
+                New Post
+              </Link>
+            </>
           ) : null}
           <Link
             to={currentUser?.username ? `/profile/${currentUser.username}` : "/sign-in"}

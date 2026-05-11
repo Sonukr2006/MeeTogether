@@ -32,6 +32,14 @@ enum DeploymentStatus {
   QUEUED
 }
 
+enum PostType {
+  BUILD_LOG
+  HELP_NEEDED
+  MENTOR_REVIEW
+  LAUNCH
+  PROFESSIONAL_UPDATE
+}
+
 model User {
   id                          String         @id @default(cuid())
   name                        String
@@ -62,6 +70,7 @@ model User {
   threadParticipantStates     ThreadParticipantState[]
   createdIssues               Issue[]           @relation("CreatedIssues")
   assignedIssues              Issue[]           @relation("AssignedIssues")
+  posts                       Post[]
 }
 
 model Session {
@@ -163,6 +172,7 @@ model Project {
   relatedRequests Request[]       @relation("RequestRelatedProject")
   issues        Issue[]
   deployments   Deployment[]
+  posts         Post[]
 
   @@index([ownerUserId])
 }
@@ -325,4 +335,35 @@ model Deployment {
 
   @@index([projectId])
   @@index([status])
+}
+
+model Post {
+  id            String    @id @default(cuid())
+  authorUserId  String
+  projectId     String?
+  type          PostType
+  title         String
+  description   String
+  imageUrl      String?
+  likesCount    Int       @default(0)
+  commentsCount Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  author        User      @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+  project       Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  tags          PostTag[]
+
+  @@index([authorUserId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([type, createdAt])
+}
+
+model PostTag {
+  id        String   @id @default(cuid())
+  postId     String
+  value     String
+  sortOrder Int      @default(0)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, sortOrder])
 }
