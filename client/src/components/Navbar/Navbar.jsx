@@ -58,22 +58,22 @@ const Navbar = () => {
 
   return (
     <>
-      <header className="sticky top-1 z-30 rounded-full border border-slate-300/80 bg-white/85 backdrop-blur-xl dark:border-white/15 dark:bg-slate-950/75">
-        <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center overflow-visible border-slate-300  dark:border-white/10 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.02)]">
+      <header className="sticky top-0 z-30 rounded-b-[1.5rem] rounded-t-none border-x-0 border-b border-t-0 border-slate-300/80 bg-white/85 backdrop-blur-xl dark:border-white/15 dark:bg-slate-950/75 md:top-1 md:rounded-full md:border">
+        <nav className="mx-auto flex max-w-7xl items-center justify-between px-3 py-3 sm:px-6 sm:py-4 lg:px-8">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center overflow-visible border-slate-300 dark:border-white/10 dark:shadow-[0_0_0_1px_rgba(255,255,255,0.02)] sm:h-10 sm:w-10">
             {/* <img src="/meet.svg" alt="MeeTogether Logo" className="h-13 w-13 max-w-none object-contain" /> */}
             <img
               src="/meet.svg"
               alt="MeeTogether Logo"
-              className="h-[50px] w-[50px] max-w-none object-contain md:h-[53px] md:w-[53px]"
+              className="h-[44px] w-[44px] max-w-none object-contain sm:h-[50px] sm:w-[50px] md:h-[53px] md:w-[53px]"
             />
           </div>
           <div>
-            <h2 className="text-m font-semibold tracking-wide text-slate-900 dark:text-slate-100">
+            <h2 className="text-[0.95rem] font-semibold tracking-wide text-slate-900 dark:text-slate-100 sm:text-[1.05rem]">
               MeeTogether
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 sm:text-xs">
               Build-first tech network
             </p>
           </div>
@@ -99,7 +99,6 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
           {currentUser ? (
             <div className="relative hidden md:block">
               <button
@@ -147,7 +146,7 @@ const Navbar = () => {
           ) : null}
           <Link
             to={currentUser?.username ? `/profile/${currentUser.username}` : "/sign-in"}
-            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300"
+            className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-900 dark:text-slate-300 sm:h-10 sm:w-10 md:border md:border-slate-300 md:dark:border-white/10 md:rounded-xl"
             aria-label={currentUser ? "Open Proof Profile" : "Open Sign In"}
           >
             {currentUser ? (
@@ -162,7 +161,7 @@ const Navbar = () => {
           </Link>
           <Link
             to={currentUser ? "/requests" : "/sign-in"}
-            className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-900 dark:text-slate-300 sm:h-10 sm:w-10 md:border md:border-slate-300 md:dark:border-white/10 md:rounded-xl"
             aria-label={currentUser ? "Open Requests Center" : "Open Sign In"}
           >
             <Bell size={16} />
@@ -174,7 +173,7 @@ const Navbar = () => {
           </Link>
           <button
             onClick={() => setIsMobileMenuOpen((open) => !open)}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white md:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white sm:h-10 sm:w-10 md:hidden"
             type="button"
             aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
             aria-expanded={isMobileMenuOpen}

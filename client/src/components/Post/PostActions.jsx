@@ -1,10 +1,10 @@
 import {
   Bookmark,
-  MessageCircle,
   Share2,
   Sparkles,
-  ThumbsUp,
 } from "lucide-react";
+import CommentActionButton from "../ui/CommentActionButton";
+import LikeActionButton from "../ui/LikeActionButton";
 
 export default function PostActions({
   comments,
@@ -19,31 +19,15 @@ export default function PostActions({
     <div className="border-t border-slate-200 pt-3 dark:border-slate-800">
       <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-5 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
-          <button
-            type="button"
+          <LikeActionButton
+            liked={liked}
+            count={likes}
+            label="Support"
+            activeLabel="Supported"
             onClick={onLikeClick}
-            className={`inline-flex items-center gap-2 transition duration-200 ${
-              liked
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-slate-500 hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
-            }`}
-            aria-label={`Support post${likes ? `, ${likes} supports` : ""}`}
-          >
-            <ThumbsUp size={16} fill={liked ? "currentColor" : "none"} />
-            <span className="text-sm">{likes}</span>
-            <span className="sr-only sm:not-sr-only sm:inline">Support</span>
-          </button>
+          />
 
-          <button
-            type="button"
-            onClick={onCommentClick}
-            className="inline-flex items-center gap-2 text-slate-500 transition duration-200 hover:text-sky-600 dark:text-slate-400 dark:hover:text-sky-400"
-            aria-label={`Comments, ${comments}`}
-          >
-            <MessageCircle size={16} />
-            <span className="text-sm">{comments}</span>
-            <span className="sr-only sm:not-sr-only sm:inline">Comments</span>
-          </button>
+          <CommentActionButton count={comments} label="Comments" onClick={onCommentClick} />
 
           <button
             type="button"
