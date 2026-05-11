@@ -48,20 +48,23 @@ We do **not** need full production complexity in phase 1.
 
 ## Recommended backend stack
 
-Suggested baseline:
+Recommended baseline:
 
 - `Node.js`
-- `Express`
-- `MongoDB`
-- `Mongoose`
+- `NestJS`
+- `PostgreSQL`
+- `Prisma`
 - `JWT auth`
+- `refresh token in secure httpOnly cookie`
 - `bcrypt` for password hashing
 
 Why this stack:
 
-- simple enough for the current project size
-- flexible for document-style project/discussion data
-- familiar for MERN-style development
+- stronger long-term module structure
+- better fit for relational product data
+- clearer ownership boundaries
+- safer migrations and schema discipline
+- better foundation for auth, permissions, requests, and discussion read state
 
 ## Main backend modules
 
@@ -199,21 +202,24 @@ Need frontend changes later:
 
 Create backend app scaffold:
 
-- express app
+- NestJS app
 - env config
-- db connection
-- route folders
-- controller folders
-- model folders
+- Prisma setup
+- module folders
+- global validation and exception handling
 
 ### Step 2
 
 Implement auth:
 
-- user model
+- user schema in Prisma
+- session schema in Prisma
 - signup
 - login
 - current user route
+- refresh token flow
+- session persistence
+- logout and logout-all
 
 ### Step 3
 
@@ -229,6 +235,8 @@ Implement discussions:
 - get project threads
 - get thread messages
 - create message
+- mark thread read
+- per-user read state
 
 ### Step 5
 
@@ -258,6 +266,17 @@ Implement requests + saved projects:
 3. Ravi opens `/discussions?projectId=2`
 4. frontend requests project threads from backend
 5. Ravi sends a message
+6. backend updates thread participant read state
+
+## Supporting docs
+
+Use these docs together with this plan:
+
+- `docs/visibility-and-access-model.md`
+- `docs/discussion-design.md`
+- `docs/authorization-rules.md`
+- `docs/security-and-auth.md`
+- `docs/nest-module-architecture.md`
 6. backend saves:
    - `projectId`
    - `threadId`
@@ -284,9 +303,8 @@ Implement requests + saved projects:
 
 Best next code task after this doc:
 
-1. scaffold `server/package.json`
-2. create express app
-3. create auth routes
-4. create user model
-5. create JWT middleware
-
+1. scaffold NestJS app in `server/`
+2. add Prisma + PostgreSQL config
+3. create `AuthModule`
+4. create `UsersModule`
+5. wire JWT auth guard and refresh flow

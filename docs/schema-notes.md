@@ -1,6 +1,6 @@
 # Schema Notes
 
-These are suggested Mongo/Mongoose-friendly entities for MeeTogether.
+These are suggested PostgreSQL + Prisma-friendly entities for MeeTogether.
 
 This is a planning document, not final code.
 
@@ -16,7 +16,7 @@ Suggested fields:
 
 ```js
 User {
-  _id,
+  id,
   name,
   username,
   email,
@@ -26,14 +26,43 @@ User {
   title,
   location,
   openTo: [String],
-  savedProjectIds: [ObjectId],
-  likedProjectIds: [ObjectId],
   createdAt,
   updatedAt
 }
 ```
 
-## 2. ProofProfile
+Related relational tables instead of array ownership on the user row:
+
+- `ProjectSave`
+- `ProjectLike`
+- `Session`
+
+## 2. Session
+
+Purpose:
+
+- refresh token session tracking
+- device/session management
+
+Suggested fields:
+
+```js
+Session {
+  id,
+  userId,
+  refreshTokenHash,
+  tokenFamilyId,
+  userAgent,
+  ipAddress,
+  expiresAt,
+  revokedAt,
+  lastUsedAt,
+  createdAt,
+  updatedAt
+}
+```
+
+## 3. ProofProfile
 
 Purpose:
 
@@ -43,7 +72,7 @@ Suggested fields:
 
 ```js
 ProofProfile {
-  _id,
+  id,
   userId,
   proofScore,
   builderLevel,
@@ -63,7 +92,7 @@ Note:
 
 Some of this can be derived instead of fully stored.
 
-## 3. Project
+## 4. Project
 
 Purpose:
 
@@ -73,28 +102,35 @@ Suggested fields:
 
 ```js
 Project {
-  _id,
+  id,
   ownerUserId,
   title,
   problem,
   solution,
   image,
   progress,
-  techStack: [String],
-  openRoles: [String],
+  visibility,
   difficulty,
   timeline,
   mentorStatus,
   githubUrl,
   demoUrl,
-  tags: [String],
-  contributorUserIds: [ObjectId],
   createdAt,
   updatedAt
 }
 ```
 
-## 4. Issue
+Recommended relational helpers:
+
+- `ProjectMember`
+- `ProjectTechTag`
+- `ProjectOpenRole`
+- `ProjectTag`
+- `ProjectLink`
+- `ProjectSave`
+- `ProjectLike`
+
+## 5. Issue
 
 Purpose:
 
@@ -104,7 +140,7 @@ Suggested fields:
 
 ```js
 Issue {
-  _id,
+  id,
   projectId,
   title,
   description,
@@ -113,14 +149,18 @@ Issue {
   assigneeUserId,
   createdByUserId,
   relatedThreadId,
-  stackTags: [String],
   roleNeed,
   createdAt,
   updatedAt
 }
 ```
 
-## 5. DiscussionThread
+Related helpers if needed:
+
+- `IssueTag`
+- `IssueActivity`
+
+## 6. DiscussionThread
 
 Purpose:
 
@@ -130,18 +170,18 @@ Suggested fields:
 
 ```js
 DiscussionThread {
-  _id,
+  id,
   projectId,
   title,
   createdByUserId,
-  participantUserIds: [ObjectId],
+  kind,
   lastMessageAt,
   createdAt,
   updatedAt
 }
 ```
 
-## 6. DiscussionMessage
+## 7. DiscussionMessage
 
 Purpose:
 
@@ -151,18 +191,42 @@ Suggested fields:
 
 ```js
 DiscussionMessage {
-  _id,
+  id,
   threadId,
-  projectId,
   authorUserId,
   message,
-  sentAt,
+  editedAt,
+  deletedAt,
+  sequenceNumber,
   createdAt,
   updatedAt
 }
 ```
 
-## 7. Request
+## 8. ThreadParticipantState
+
+Purpose:
+
+- per-user read and participation state
+
+Suggested fields:
+
+```js
+ThreadParticipantState {
+  id,
+  threadId,
+  userId,
+  lastReadMessageId,
+  lastReadAt,
+  unreadCountSnapshot,
+  joinedAt,
+  mutedAt,
+  createdAt,
+  updatedAt
+}
+```
+
+## 9. Request
 
 Purpose:
 
@@ -172,21 +236,22 @@ Suggested fields:
 
 ```js
 Request {
-  _id,
+  id,
   fromUserId,
   toUserId,
   type, // Project | Mentor | Internship | Message | Resume
   title,
   status,
   message,
-  proof: [String],
+  relatedProjectId,
+  relatedThreadId,
   unread,
   createdAt,
   updatedAt
 }
 ```
 
-## 8. Deployment
+## 10. Deployment
 
 Purpose:
 
@@ -196,15 +261,19 @@ Suggested fields:
 
 ```js
 Deployment {
-  _id,
+  id,
   projectId,
   environment, // Production | Preview
-  status, // Live | Preview | Queued
+  status, // Live | Preview | Queued | Failed
   liveUrl,
+  previewUrl,
   repoUrl,
-  progress,
+  commitSha,
+  releaseVersion,
   buildHealth,
   releaseFocus,
+  startedAt,
+  finishedAt,
   updatedAt
 }
 ```
@@ -212,17 +281,22 @@ Deployment {
 ## Relationships summary
 
 - one `User` can own many `Project`
+- one `Project` can have many `ProjectMember`
 - one `Project` can have many `Issue`
 - one `Project` can have many `DiscussionThread`
 - one `DiscussionThread` can have many `DiscussionMessage`
+- one `DiscussionThread` can have many `ThreadParticipantState`
 - one `User` can send and receive many `Request`
 - one `Project` can have zero or many `Deployment` records
+- one `User` can have many `Session`
+- one `User` can save or like many projects through join tables
 
 ## First version simplification
 
 For first backend version:
 
 - keep `DiscussionThread` + `DiscussionMessage` separate
-- keep `ProofProfile` as a separate document or computed service layer
+- keep `ThreadParticipantState` for unread/read support
+- keep `ProofProfile` as a separate table or computed service layer
 - allow some computed counts instead of storing everything eagerly
-
+- start with one default thread per project
