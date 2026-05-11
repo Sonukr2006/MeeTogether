@@ -1,12 +1,8 @@
 import { createSlice } from "@reduxjs/toolkit";
-import {
-  actionRequestTemplates,
-  initialOpportunityRequests,
-  requestProofPackage,
-} from "../data/proofProfile";
+import { actionRequestTemplates, requestProofPackage } from "../lib/uiDefaults";
 
 const initialState = {
-  requests: initialOpportunityRequests,
+  requests: [],
 };
 
 const opportunityRequestsSlice = createSlice({

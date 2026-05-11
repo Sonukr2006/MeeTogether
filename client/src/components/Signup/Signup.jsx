@@ -1,20 +1,32 @@
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeClosed, Loader2 } from "lucide-react";
-    
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { useAlert } from "../../contexts/AlertProvider";
 import AuthWith from "../Auth/AuthWith";
+import { signUpUser } from "../../store/authSlice";
 
 const Signup = () => {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { showAlert } = useAlert();
+  const { status, currentUser } = useSelector((state) => state.auth);
 
   const [formData, setFormData] = useState({
+    name: "",
+    username: "",
     email: "",
     password: "",
   });
 
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const loading = status === "loading";
+
+  useEffect(() => {
+    if (currentUser?.username) {
+      navigate(`/profile/${currentUser.username}`);
+    }
+  }, [currentUser, navigate]);
 
   const handleChange = (e) => {
     setFormData({
@@ -23,17 +35,23 @@ const Signup = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // setLoading(true);
 
-    // setTimeout(() => {
-    //   console.log(formData);
-    //   setLoading(false);
-    // }, 2000);
+    try {
+      await dispatch(
+        signUpUser({
+          name: formData.name.trim(),
+          username: formData.username.trim().toLowerCase(),
+          email: formData.email.trim(),
+          password: formData.password,
+        })
+      ).unwrap();
 
-
-      showAlert("This is a demo. Sign in functionality is not implemented.", "success");
+      showAlert("Account created successfully.", "success");
+    } catch (error) {
+      showAlert(error.message || "Sign up failed.", "error");
+    }
   };
 
   return (
@@ -67,6 +85,29 @@ const Signup = () => {
               peer-focus:text-indigo-200"
             >
               Name
+            </label>
+          </div>
+
+          <div className="relative">
+            <input
+              type="text"
+              name="username"
+              value={formData.username}
+              onChange={handleChange}
+              required
+              className="peer w-full px-4 pt-5 pb-2 bg-transparent border border-gray-600 rounded-lg text-white placeholder-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Username"
+            />
+            <label
+              className="absolute left-4 top-2 text-gray-400 text-sm transition-all 
+              peer-placeholder-shown:top-3.5 
+              peer-placeholder-shown:text-base 
+              peer-placeholder-shown:text-gray-500 
+              peer-focus:top-0.5
+              peer-focus:text-sm 
+              peer-focus:text-indigo-200"
+            >
+              Username
             </label>
           </div>
           
@@ -135,7 +176,7 @@ const Signup = () => {
             {loading ? (
               <>
                 <Loader2 className="animate-spin" size={18} />
-                Signing in...
+                Creating account...
               </>
             ) : (
               "Sign Up"

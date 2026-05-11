@@ -1,25 +1,55 @@
-import { Bell, Menu, User, X } from "lucide-react";
+import { Bell, LogOut, Menu, PlusCircle, User, X } from "lucide-react";
 import { useState } from "react";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { Link, NavLink } from "react-router-dom";
+import { useAlert } from "../../contexts/AlertProvider";
+import { emptyProfile } from "../../lib/uiDefaults";
+import { logOutUser } from "../../store/authSlice";
 import ThemeToggle from "../Theme/ThemeToggle";
 
-const navItems = [
+const baseNavItems = [
   { label: "Home", to: "/" },
   { label: "Requests", to: "/requests" },
   { label: "Issues", to: "/issues" },
   { label: "Discussions", to: "/discussions" },
   { label: "Deployments", to: "/deployments" },
+];
+
+const guestNavItems = [
   { label: "Sign In", to: "/sign-in" },
   { label: "Sign Up", to: "/sign-up" },
 ];
 
 const Navbar = () => {
+  const dispatch = useDispatch();
+  const { showAlert } = useAlert();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
+  const currentUser = useSelector((state) => state.auth.currentUser);
   const unreadRequests = useSelector(
     (state) =>
       state.opportunityRequests.requests.filter((request) => request.unread).length
   );
+  const navItems = currentUser ? baseNavItems : guestNavItems;
+
+  const openLogoutConfirm = () => {
+    setIsLogoutConfirmOpen(true);
+  };
+
+  const closeLogoutConfirm = () => {
+    setIsLogoutConfirmOpen(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await dispatch(logOutUser()).unwrap();
+      showAlert("Signed out successfully.", "success");
+      setIsMobileMenuOpen(false);
+      setIsLogoutConfirmOpen(false);
+    } catch (error) {
+      showAlert(error.message || "Sign out failed.", "error");
+    }
+  };
 
   return (
     <>
@@ -65,17 +95,34 @@ const Navbar = () => {
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          {currentUser ? (
+            <Link
+              to="/create/project"
+              className="hidden items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 md:inline-flex"
+            >
+              <PlusCircle size={16} />
+              Create
+            </Link>
+          ) : null}
           <Link
-            to="/profile/sonu"
-            className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300"
-            aria-label="Open Proof Profile"
+            to={currentUser?.username ? `/profile/${currentUser.username}` : "/sign-in"}
+            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300"
+            aria-label={currentUser ? "Open Proof Profile" : "Open Sign In"}
           >
-            <User size={16} />
+            {currentUser ? (
+              <img
+                src={currentUser.avatar || emptyProfile.avatar}
+                alt={currentUser.name || "Profile"}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <User size={16} />
+            )}
           </Link>
           <Link
-            to="/requests"
+            to={currentUser ? "/requests" : "/sign-in"}
             className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300"
-            aria-label="Open Requests Center"
+            aria-label={currentUser ? "Open Requests Center" : "Open Sign In"}
           >
             <Bell size={16} />
             {unreadRequests > 0 && (
@@ -147,24 +194,100 @@ const Navbar = () => {
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
+          {currentUser ? (
+            <Link
+              to="/create/project"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/20"
+            >
+              <PlusCircle size={16} />
+              Create
+            </Link>
+          ) : null}
           <Link
-            to="/profile/sonu"
+            to={currentUser?.username ? `/profile/${currentUser.username}` : "/sign-in"}
             onClick={() => setIsMobileMenuOpen(false)}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
           >
-            <User size={16} />
-            Profile
+            {currentUser ? (
+              <img
+                src={currentUser.avatar || emptyProfile.avatar}
+                alt={currentUser.name || "Profile"}
+                className="h-5 w-5 rounded-full object-cover"
+              />
+            ) : (
+              <User size={16} />
+            )}
+            {currentUser ? "Profile" : "Sign In"}
           </Link>
           <Link
-            to="/requests"
+            to={currentUser ? "/requests" : "/sign-in"}
             onClick={() => setIsMobileMenuOpen(false)}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
           >
             <Bell size={16} />
-            Inbox {unreadRequests > 0 ? `(${unreadRequests})` : ""}
+            {currentUser ? `Inbox ${unreadRequests > 0 ? `(${unreadRequests})` : ""}` : "Sign In"}
           </Link>
         </div>
+
+        {currentUser && (
+          <button
+            type="button"
+            onClick={openLogoutConfirm}
+            className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 transition hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200 dark:hover:bg-rose-950/60"
+          >
+            <LogOut size={16} />
+            Sign Out
+          </button>
+        )}
       </div>
+
+      {isLogoutConfirmOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                  Confirm sign out
+                </p>
+                <h2 className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  Are you sure you want to sign out?
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={closeLogoutConfirm}
+                className="rounded-md p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                aria-label="Close sign out confirmation"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="mt-3 text-sm leading-6 text-slate-500 dark:text-slate-400">
+              You’ll return to the guest view and protected pages will ask you to sign in again.
+            </p>
+
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeLogoutConfirm}
+                className="rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-700"
+              >
+                <LogOut size={16} />
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 };

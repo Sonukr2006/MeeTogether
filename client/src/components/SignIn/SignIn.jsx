@@ -1,11 +1,16 @@
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { useAlert } from "../../contexts/AlertProvider";
 import AuthWith from "../Auth/AuthWith";
+import { signInUser } from "../../store/authSlice";
 
 const SignIn = () => {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { showAlert } = useAlert();
+  const { status, currentUser } = useSelector((state) => state.auth);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -13,7 +18,13 @@ const SignIn = () => {
   });
 
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const loading = status === "loading";
+
+  useEffect(() => {
+    if (currentUser?.username) {
+      navigate(`/profile/${currentUser.username}`);
+    }
+  }, [currentUser, navigate]);
 
   const handleChange = (e) => {
     setFormData({
@@ -22,17 +33,21 @@ const SignIn = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // setLoading(true);
 
-    // setTimeout(() => {
-    //   console.log(formData);
-    //   setLoading(false);
-    // }, 2000);
+    try {
+      await dispatch(
+        signInUser({
+          identifier: formData.email.trim(),
+          password: formData.password,
+        })
+      ).unwrap();
 
-
-      showAlert("This is a demo. Sign in functionality is not implemented.", "success");
+      showAlert("Signed in successfully.", "success");
+    } catch (error) {
+      showAlert(error.message || "Sign in failed.", "error");
+    }
   };
 
   return (
@@ -48,13 +63,13 @@ const SignIn = () => {
           {/* Email Field */}
           <div className="relative">
             <input
-              type="email"
+              type="text"
               name="email"
               value={formData.email}
               onChange={handleChange}
               required
               className="peer w-full px-4 pt-5 pb-2 bg-transparent border border-gray-600 rounded-lg text-white placeholder-transparent focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Email"
+              placeholder="Email or username"
             />
             <label
               className="absolute left-4 top-2 text-gray-400 text-sm transition-all 
@@ -65,7 +80,7 @@ const SignIn = () => {
               peer-focus:text-sm 
               peer-focus:text-indigo-400"
             >
-              Email
+              Email or username
             </label>
           </div>
 

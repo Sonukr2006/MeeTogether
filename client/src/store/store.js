@@ -1,14 +1,20 @@
 import { configureStore } from "@reduxjs/toolkit";
+import authReducer from "./authSlice";
 import opportunityRequestsReducer from "./opportunityRequestsSlice";
 import postInteractionsReducer from "./postInteractionsSlice";
 import projectDiscussionsReducer from "./projectDiscussionsSlice";
 import projectInteractionsReducer from "./projectInteractionsSlice";
+import profilesReducer from "./profilesSlice";
+import projectsReducer from "./projectsSlice";
 
 export const store = configureStore({
   reducer: {
+    auth: authReducer,
     opportunityRequests: opportunityRequestsReducer,
     postInteractions: postInteractionsReducer,
     projectDiscussions: projectDiscussionsReducer,
     projectInteractions: projectInteractionsReducer,
+    profiles: profilesReducer,
+    projects: projectsReducer,
   },
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Bell,
@@ -14,7 +14,7 @@ import {
   ShieldCheck,
   X,
 } from "lucide-react";
-import { proofProfile } from "../../data/proofProfile";
+import { apiRequest } from "../../lib/api";
 import {
   markAllRequestsRead,
   updateRequestStatus,
@@ -32,27 +32,63 @@ const requestIcons = {
 
 const Requests = () => {
   const [activeFilter, setActiveFilter] = useState("All");
+  const [backendRequests, setBackendRequests] = useState(null);
   const dispatch = useDispatch();
+  const currentUser = useSelector((state) => state.auth.currentUser);
+  const profileHandle = currentUser?.username ?? "builder";
+  const profileName = currentUser?.name ?? "This builder";
   const requests = useSelector((state) => state.opportunityRequests.requests);
-  const unreadCount = requests.filter((request) => request.unread).length;
-  const highIntentCount = requests.filter((request) => request.status === "High intent").length;
-  const awaitingReplyCount = requests.filter((request) =>
+  const sourceRequests = backendRequests ?? requests;
+  const unreadCount = sourceRequests.filter((request) => request.unread).length;
+  const highIntentCount = sourceRequests.filter((request) => request.status === "High intent").length;
+  const awaitingReplyCount = sourceRequests.filter((request) =>
     ["New", "Waiting", "Reply", "Sent"].includes(request.status)
   ).length;
   const summary = [
     { label: "New requests", value: unreadCount, icon: Bell },
     { label: "High intent", value: highIntentCount, icon: ShieldCheck },
     { label: "Awaiting reply", value: awaitingReplyCount, icon: Clock3 },
-    { label: "Opportunities", value: requests.length, icon: Handshake },
+    { label: "Opportunities", value: sourceRequests.length, icon: Handshake },
   ];
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadRequests = async () => {
+      if (!currentUser?.username) {
+        setBackendRequests(null);
+        return;
+      }
+
+      try {
+        const data = await apiRequest(
+          `/requests?username=${encodeURIComponent(currentUser.username)}`
+        );
+
+        if (!ignore && Array.isArray(data)) {
+          setBackendRequests(data);
+        }
+      } catch {
+        if (!ignore) {
+          setBackendRequests(null);
+        }
+      }
+    };
+
+    loadRequests();
+
+    return () => {
+      ignore = true;
+    };
+  }, [currentUser?.username]);
 
   const visibleRequests = useMemo(() => {
     if (activeFilter === "All") {
-      return requests;
+      return sourceRequests;
     }
 
-    return requests.filter((request) => request.type === activeFilter);
-  }, [activeFilter, requests]);
+    return sourceRequests.filter((request) => request.type === activeFilter);
+  }, [activeFilter, sourceRequests]);
 
   const handleStatusUpdate = (id, status) => {
     dispatch(updateRequestStatus({ id, status }));
@@ -212,7 +248,7 @@ const Requests = () => {
                       <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                         {index === 0 && "A recruiter, mentor, or builder starts from Proof Profile."}
                         {index === 1 && "The opportunity arrives here with proof context attached."}
-                        {index === 2 && `Sonu can accept, decline, or continue the conversation.`}
+                        {index === 2 && `${profileName} can accept, decline, or continue the conversation.`}
                         {index === 3 && "Accepted work can move into a collaboration room."}
                       </p>
                     </div>
@@ -228,7 +264,7 @@ const Requests = () => {
               Proof attached by default
             </h2>
             <p className="mt-2 text-sm leading-6 text-emerald-800 dark:text-emerald-200">
-              Every request keeps the builder signal visible: shipped work, verified skills, reviews, and links for @{proofProfile.username}.
+              Every request keeps the builder signal visible: shipped work, verified skills, reviews, and links for @{profileHandle}.
             </p>
           </div>
         </aside>

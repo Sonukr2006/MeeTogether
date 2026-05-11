@@ -1,56 +1,46 @@
+import { useEffect, useState } from "react";
 import { Activity, ExternalLink, GitBranch, Rocket, ShieldCheck, TimerReset } from "lucide-react";
-import { projects } from "../../data/projects";
-
-const getDeploymentStatus = (project) => {
-  if (project.progress >= 60) {
-    return {
-      label: "Live",
-      chipClassName:
-        "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300",
-      note: "Stable build with active proof signals",
-    };
-  }
-
-  if (project.progress >= 40) {
-    return {
-      label: "Preview",
-      chipClassName:
-        "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300",
-      note: "Internal preview ready for collaborator review",
-    };
-  }
-
-  return {
-    label: "Queued",
-    chipClassName:
-      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300",
-    note: "Deployment blocked by open implementation work",
-  };
-};
-
-const deploymentCards = projects.map((project) => {
-  const deploymentStatus = getDeploymentStatus(project);
-  const latestMilestone =
-    project.milestones.find((milestone) => milestone.status === "In progress") ||
-    project.milestones[project.milestones.length - 1];
-
-  return {
-    id: project.id,
-    title: project.title,
-    status: deploymentStatus,
-    updatedAt: project.time,
-    environment: project.progress >= 60 ? "Production" : "Preview",
-    liveUrl: project.demo,
-    repoUrl: project.github,
-    progress: project.progress,
-    buildHealth: `${project.tasks.filter((task) => task.status !== "Done").length} active tasks`,
-    milestone: latestMilestone?.title || "Deployment setup",
-    stack: project.techStack.slice(0, 4),
-    mentorStatus: project.mentorStatus,
-  };
-});
+import { apiRequest } from "../../lib/api";
 
 export default function Deployments() {
+  const [deploymentCards, setDeploymentCards] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDeployments = async () => {
+      try {
+        const response = await apiRequest("/deployments");
+        if (isMounted && Array.isArray(response)) {
+          setDeploymentCards(
+            response.map((deployment) => ({
+              ...deployment,
+              status: {
+                ...deployment.status,
+                chipClassName:
+                  deployment.status.label === "Live"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+                    : deployment.status.label === "Preview"
+                      ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/20 dark:bg-sky-500/10 dark:text-sky-300"
+                      : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-300",
+              },
+            })),
+          );
+        }
+      } catch {
+        if (isMounted) {
+          setDeploymentCards([]);
+        }
+      }
+    };
+
+    void loadDeployments();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const liveCount = deploymentCards.filter((card) => card.status.label === "Live").length;
   const previewCount = deploymentCards.filter((card) => card.status.label === "Preview").length;
 
@@ -85,11 +75,12 @@ export default function Deployments() {
       </section>
 
       <section className="grid gap-4">
-        {deploymentCards.map((deployment) => (
-          <article
-            key={deployment.id}
-            className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-          >
+        {deploymentCards.length > 0 ? (
+          deploymentCards.map((deployment) => (
+            <article
+              key={deployment.id}
+              className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+            >
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -178,8 +169,16 @@ export default function Deployments() {
                 </div>
               </div>
             </div>
-          </article>
-        ))}
+            </article>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="text-lg font-semibold">No tracked deployments yet</h2>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              Deployment cards now come only from backend records.
+            </p>
+          </div>
+        )}
       </section>
     </div>
   );

@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { useDispatch } from "react-redux";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -10,8 +9,7 @@ import {
   Sparkles,
   UserPlus,
 } from "lucide-react";
-import { projects } from "../../data/projects";
-import { ensureDiscussionThread } from "../../store/projectDiscussionsSlice";
+import { apiRequest } from "../../lib/api";
 
 const STATUS_ORDER = ["Open", "In progress", "Done"];
 
@@ -39,33 +37,40 @@ const statusMeta = {
   },
 };
 
-const allIssues = projects.flatMap((project) =>
-  project.tasks.map((task, index) => ({
-    id: `${project.id}-${task.id}`,
-    title: task.title,
-    owner: task.owner,
-    status: task.status,
-    projectId: project.id,
-    projectTitle: project.title,
-    difficulty: project.difficulty,
-    mentorStatus: project.mentorStatus,
-    stack: project.techStack.slice(0, 3),
-    roleNeed: project.openRoles[0],
-    priority: index === 0 ? "High" : index === 1 ? "Medium" : "Normal",
-  }))
-);
-
 export default function Issues() {
-  const dispatch = useDispatch();
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("All");
   const [assignedIssueIds, setAssignedIssueIds] = useState({});
+  const [issues, setIssues] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadIssues = async () => {
+      try {
+        const response = await apiRequest("/issues");
+        if (isMounted && Array.isArray(response)) {
+          setIssues(response);
+        }
+      } catch {
+        if (isMounted) {
+          setIssues([]);
+        }
+      }
+    };
+
+    void loadIssues();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const filteredIssues = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
-    return allIssues.filter((issue) => {
+    return issues.filter((issue) => {
       const matchesProject =
         projectFilter === "All" || issue.projectTitle === projectFilter;
       const matchesQuery =
@@ -84,7 +89,12 @@ export default function Issues() {
 
       return matchesProject && matchesQuery;
     });
-  }, [projectFilter, query]);
+  }, [issues, projectFilter, query]);
+
+  const projectTitles = useMemo(
+    () => [...new Set(issues.map((issue) => issue.projectTitle))],
+    [issues],
+  );
 
   const issuesByStatus = STATUS_ORDER.map((status) => ({
     status,
@@ -92,13 +102,6 @@ export default function Issues() {
   }));
 
   const handleDiscuss = (issue) => {
-    dispatch(
-      ensureDiscussionThread({
-        authorName: "Sonu Kumar",
-        projectId: issue.projectId,
-        projectTitle: issue.projectTitle,
-      })
-    );
     navigate(`/discussions?projectId=${issue.projectId}`);
   };
 
@@ -146,18 +149,18 @@ export default function Issues() {
             >
               All projects
             </button>
-            {projects.map((project) => (
+            {projectTitles.map((projectTitle) => (
               <button
-                key={project.id}
+                key={projectTitle}
                 type="button"
-                onClick={() => setProjectFilter(project.title)}
+                onClick={() => setProjectFilter(projectTitle)}
                 className={`rounded-md border px-3 py-2 text-sm font-medium transition ${
-                  projectFilter === project.title
+                  projectFilter === projectTitle
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
                     : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
                 }`}
               >
-                {project.title}
+                {projectTitle}
               </button>
             ))}
           </div>

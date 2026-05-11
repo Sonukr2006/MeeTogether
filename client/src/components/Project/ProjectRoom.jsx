@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -10,7 +11,8 @@ import {
   Users,
 } from "lucide-react";
 import ContributorStack from "./ContributorStack";
-import { projects } from "../../data/projects";
+import { apiRequest } from "../../lib/api";
+import { mapApiProjectToDetail } from "../../lib/backendMappers";
 
 const statusClasses = {
   Done: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
@@ -22,7 +24,35 @@ const statusClasses = {
 
 export default function ProjectRoom() {
   const { projectId } = useParams();
-  const project = projects.find((item) => String(item.id) === projectId);
+  const [project, setProject] = useState(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadProject = async () => {
+      if (!projectId) {
+        return;
+      }
+
+      try {
+        const data = await apiRequest(`/projects/${projectId}`);
+
+        if (!ignore) {
+          setProject(mapApiProjectToDetail(data));
+        }
+      } catch {
+        if (!ignore) {
+          setProject(null);
+        }
+      }
+    };
+
+    loadProject();
+
+    return () => {
+      ignore = true;
+    };
+  }, [projectId]);
 
   if (!project) {
     return (

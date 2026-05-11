@@ -1,3 +1,6 @@
+import { useEffect, useMemo } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useParams } from "react-router-dom";
 import {
   Award,
   CheckCircle2,
@@ -10,16 +13,59 @@ import {
   ShieldCheck,
   Star,
 } from "lucide-react";
-import { proofProfile } from "../../data/proofProfile";
-
-const resumeHighlights = [
-  { label: "Shipped projects", value: `${proofProfile.shippedProjects}`, icon: Rocket },
-  { label: "Completed tasks", value: `${proofProfile.completedTasks}`, icon: CheckCircle2 },
-  { label: "Verified skills", value: `${proofProfile.verifiedSkills}`, icon: ShieldCheck },
-  { label: "Mentor reviews", value: `${proofProfile.mentorReviews}`, icon: GraduationCap },
-];
+import { emptyProfile } from "../../lib/uiDefaults";
+import { fetchProfileByUsername } from "../../store/profilesSlice";
+import { fetchProjects } from "../../store/projectsSlice";
 
 const Resume = () => {
+  const { userId } = useParams();
+  const dispatch = useDispatch();
+  const projectCatalog = useSelector((state) => state.projects.items);
+  const profileEntry = useSelector((state) =>
+    userId ? state.profiles.byUsername[userId] : null,
+  );
+  const profileData = profileEntry?.profile ?? {
+    ...emptyProfile,
+    username: userId ?? emptyProfile.username,
+  };
+
+  useEffect(() => {
+    dispatch(fetchProjects());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (userId) {
+      dispatch(fetchProfileByUsername(userId));
+    }
+  }, [dispatch, userId]);
+
+  const ownedProjects = useMemo(
+    () =>
+      projectCatalog.filter(
+        (project) =>
+          project.user.username === profileData.username ||
+          project.user.name === profileData.name,
+      ),
+    [profileData.name, profileData.username, projectCatalog],
+  );
+
+  const resumeHighlights = [
+    { label: "Shipped projects", value: `${profileData.shippedProjects}`, icon: Rocket },
+    { label: "Completed tasks", value: `${profileData.completedTasks}`, icon: CheckCircle2 },
+    { label: "Verified skills", value: `${profileData.verifiedSkills}`, icon: ShieldCheck },
+    { label: "Mentor reviews", value: `${profileData.mentorReviews}`, icon: GraduationCap },
+  ];
+
+  if (profileEntry?.status === "loading" && !profileEntry?.profile) {
+    return (
+      <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+          Loading proof resume...
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl text-slate-900 dark:text-slate-100 print:max-w-none print:bg-white print:text-slate-950">
       <div className="mb-4 flex flex-col gap-3 print:hidden sm:flex-row sm:items-center sm:justify-between">
@@ -48,20 +94,23 @@ const Resume = () => {
                 Verified builder
               </span>
               <span className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300 print:border print:border-slate-200 print:bg-white">
-                @{proofProfile.username}
+                @{profileData.username}
               </span>
             </div>
             <h2 className="mt-4 text-4xl font-semibold tracking-normal print:text-3xl">
-              {proofProfile.name}
+              {profileData.name}
             </h2>
             <p className="mt-2 text-sm font-medium text-slate-600 dark:text-slate-300 print:text-slate-700">
-              {proofProfile.headline}
+              {profileData.headline}
             </p>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500 dark:text-slate-400 print:text-slate-700">
-              {proofProfile.summary}
+              {profileData.summary}
             </p>
             <div className="mt-4 flex flex-wrap gap-2 text-xs text-slate-600 dark:text-slate-300 print:text-slate-700">
-              {proofProfile.resumeLinks.map((link) => (
+              {(profileData.resumeLinks.length > 0
+                ? profileData.resumeLinks
+                : profileData.links.map((link) => link.value)
+              ).map((link) => (
                 <span
                   key={link}
                   className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1 dark:border-slate-700"
@@ -79,15 +128,15 @@ const Resume = () => {
                 <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                   Proof score
                 </p>
-                <p className="mt-2 text-4xl font-semibold">{proofProfile.proofScore}</p>
+                <p className="mt-2 text-4xl font-semibold">{profileData.proofScore}</p>
               </div>
               <Award className="text-emerald-700 dark:text-emerald-300" size={30} />
             </div>
             <p className="mt-4 text-sm font-semibold text-emerald-900 dark:text-emerald-100 print:text-slate-900">
-              {proofProfile.builderLevel}
+              {profileData.builderLevel}
             </p>
             <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300 print:text-slate-700">
-              {proofProfile.rank}
+              {profileData.rank}
             </p>
           </div>
         </header>
@@ -117,37 +166,43 @@ const Resume = () => {
               <h3 className="text-lg font-semibold">Shipped Projects</h3>
             </div>
             <div className="mt-3 space-y-3">
-              {proofProfile.projects.map((project) => (
-                <div
-                  key={project.name}
-                  className="rounded-lg border border-slate-200 p-4 dark:border-slate-800"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="font-semibold">{project.name}</h4>
-                      <span className="rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 dark:bg-sky-500/10 dark:text-sky-300 print:border print:border-sky-200 print:bg-white">
-                        {project.status}
+              {ownedProjects.length > 0 ? (
+                ownedProjects.map((project) => (
+                  <div
+                    key={project.id}
+                    className="rounded-lg border border-slate-200 p-4 dark:border-slate-800"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="font-semibold">{project.title}</h4>
+                        <span className="rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 dark:bg-sky-500/10 dark:text-sky-300 print:border print:border-sky-200 print:bg-white">
+                          {project.progress >= 100 ? "Shipped" : "Live build"}
+                        </span>
+                      </div>
+                      <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                        {project.progress}% shipped
                       </span>
                     </div>
-                    <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                      {project.impact}
-                    </span>
+                    <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300 print:text-slate-700">
+                      {project.solution || project.problem || "Project proof is being assembled from backend records."}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {project.techStack.map((tech) => (
+                        <span
+                          key={tech}
+                          className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300 print:border print:border-slate-200 print:bg-white print:text-slate-700"
+                        >
+                          {tech}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300 print:text-slate-700">
-                    {project.resumeProof}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {(project.resumeStack || project.stack).map((tech) => (
-                      <span
-                        key={tech}
-                        className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300 print:border print:border-slate-200 print:bg-white print:text-slate-700"
-                      >
-                        {tech}
-                      </span>
-                    ))}
-                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                  No backend-linked projects are available for this resume yet.
                 </div>
-              ))}
+              )}
             </div>
           </section>
 
@@ -158,17 +213,23 @@ const Resume = () => {
                 <h3 className="text-lg font-semibold">Verified Skills</h3>
               </div>
               <div className="mt-3 space-y-2">
-                {proofProfile.skills.map((skill) => (
-                  <div
-                    key={skill.name}
-                    className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"
-                  >
-                    <p className="text-sm font-semibold">{skill.name}</p>
-                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 print:text-slate-700">
-                      {skill.evidence}
-                    </p>
+                {profileData.skills.length > 0 ? (
+                  profileData.skills.map((skill) => (
+                    <div
+                      key={skill.name}
+                      className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"
+                    >
+                      <p className="text-sm font-semibold">{skill.name}</p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 print:text-slate-700">
+                        {skill.evidence}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                    No verified skills yet.
                   </div>
-                ))}
+                )}
               </div>
             </section>
 
@@ -178,25 +239,31 @@ const Resume = () => {
                 <h3 className="text-lg font-semibold">Mentor Reviews</h3>
               </div>
               <div className="mt-3 space-y-3">
-                {proofProfile.reviews.map((review) => (
-                  <div
-                    key={review.mentor}
-                    className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"
-                  >
-                    <div className="flex gap-1 text-amber-500">
-                      {Array.from({ length: review.rating }).map((_, index) => (
-                        <Star key={index} size={13} fill="currentColor" />
-                      ))}
+                {profileData.reviews.length > 0 ? (
+                  profileData.reviews.map((review) => (
+                    <div
+                      key={review.mentor}
+                      className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"
+                    >
+                      <div className="flex gap-1 text-amber-500">
+                        {Array.from({ length: review.rating }).map((_, index) => (
+                          <Star key={index} size={13} fill="currentColor" />
+                        ))}
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300 print:text-slate-700">
+                        "{review.text}"
+                      </p>
+                      <p className="mt-2 text-sm font-semibold">{review.mentor}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 print:text-slate-700">
+                        {review.role}
+                      </p>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300 print:text-slate-700">
-                      "{review.text}"
-                    </p>
-                    <p className="mt-2 text-sm font-semibold">{review.mentor}</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 print:text-slate-700">
-                      {review.role}
-                    </p>
+                  ))
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                    No mentor reviews available yet.
                   </div>
-                ))}
+                )}
               </div>
             </section>
           </aside>
@@ -206,7 +273,7 @@ const Resume = () => {
           <span>Generated by MeeTogether Proof Profile</span>
           <span className="inline-flex items-center gap-1.5">
             <ExternalLink size={13} />
-            /profile/sonu · /resume/sonu
+            /profile/{profileData.username} · /resume/{profileData.username}
           </span>
         </footer>
       </article>

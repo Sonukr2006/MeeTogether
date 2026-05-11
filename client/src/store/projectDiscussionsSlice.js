@@ -1,44 +1,8 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { projects } from "../data/projects";
-
-const createInitialState = () => {
-  const threadsByProject = {};
-  const activeThreadByProject = {};
-  const nowLabel = () =>
-    new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-
-  projects.forEach((project) => {
-    const messages = (project.discussions || []).map((discussion) => ({
-      id: discussion.id,
-      author: discussion.author,
-      role: discussion.role,
-      message: discussion.message,
-      sentAt: nowLabel(),
-    }));
-
-    if (messages.length > 0) {
-      const threadId = `project-${project.id}-general`;
-      threadsByProject[project.id] = [
-        {
-          id: threadId,
-          title: `${project.title} discussion`,
-          createdBy: messages[0].author,
-          lastActivity: project.time,
-          messages,
-        },
-      ];
-      activeThreadByProject[project.id] = threadId;
-    } else {
-      threadsByProject[project.id] = [];
-      activeThreadByProject[project.id] = null;
-    }
-  });
-
-  return {
-    activeThreadByProject,
-    threadsByProject,
-  };
-};
+const createInitialState = () => ({
+  activeThreadByProject: {},
+  threadsByProject: {},
+});
 
 const ensureProjectThread = (state, projectId, projectTitle, authorName) => {
   const existingThreads = state.threadsByProject[projectId] || [];

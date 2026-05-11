@@ -11,7 +11,8 @@ import {
   Target,
   Users,
 } from "lucide-react";
-import { projects } from "../../data/projects";
+import { apiRequest } from "../../lib/api";
+import { fetchProjects } from "../../store/projectsSlice";
 import {
   addDiscussionMessage,
   ensureDiscussionThread,
@@ -24,7 +25,14 @@ const Discussions = () => {
   const [messageText, setMessageText] = useState("");
   const [roomQuery, setRoomQuery] = useState("");
   const [showMobileInbox, setShowMobileInbox] = useState(false);
+  const [backendThreads, setBackendThreads] = useState({});
+  const [backendMessages, setBackendMessages] = useState({});
+  const [activeBackendThreadByProject, setActiveBackendThreadByProject] = useState(
+    {},
+  );
   const projectIdParam = searchParams.get("projectId");
+  const currentUser = useSelector((state) => state.auth.currentUser);
+  const projectItems = useSelector((state) => state.projects.items);
 
   const threadsByProject = useSelector((state) => state.projectDiscussions.threadsByProject);
   const activeThreadByProject = useSelector(
@@ -32,22 +40,29 @@ const Discussions = () => {
   );
 
   const selectedProject = useMemo(() => {
-    if (projectIdParam) {
-      return projects.find((project) => String(project.id) === projectIdParam) || projects[0];
+    if (projectItems.length === 0) {
+      return null;
     }
 
-    return projects[0];
-  }, [projectIdParam]);
+    if (projectIdParam) {
+      return (
+        projectItems.find((project) => String(project.id) === projectIdParam) ||
+        projectItems[0]
+      );
+    }
 
-  const selectedProjectId = String(selectedProject.id);
+    return projectItems[0];
+  }, [projectIdParam, projectItems]);
+
+  const selectedProjectId = selectedProject ? String(selectedProject.id) : "";
   const filteredProjects = useMemo(() => {
     const query = roomQuery.trim().toLowerCase();
 
     if (!query) {
-      return projects;
+      return projectItems;
     }
 
-    return projects.filter((project) => {
+    return projectItems.filter((project) => {
       const searchableText = [
         project.title,
         project.problem,
@@ -60,14 +75,30 @@ const Discussions = () => {
 
       return searchableText.includes(query);
     });
-  }, [roomQuery]);
-  const selectedThreads = threadsByProject[selectedProjectId] || [];
-  const activeThreadId = activeThreadByProject[selectedProjectId];
+  }, [projectItems, roomQuery]);
+
+  const fallbackThreads = threadsByProject[selectedProjectId] || [];
+  const fallbackActiveThreadId = activeThreadByProject[selectedProjectId];
+  const liveThreads = backendThreads[selectedProjectId];
+  const selectedThreads = liveThreads ?? fallbackThreads;
+  const activeThreadId = activeBackendThreadByProject[selectedProjectId] ?? fallbackActiveThreadId;
+  const selectedMessageList = activeThreadId
+    ? backendMessages[activeThreadId]
+    : null;
   const activeThread =
-    selectedThreads.find((thread) => thread.id === activeThreadId) || selectedThreads[0];
+    selectedThreads.find((thread) => thread.id === activeThreadId) ||
+    selectedThreads[0];
   const showThreadList = selectedThreads.length > 1;
 
   useEffect(() => {
+    dispatch(fetchProjects());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!selectedProject) {
+      return;
+    }
+
     if (!projectIdParam) {
       setSearchParams({ projectId: String(selectedProject.id) }, { replace: true });
       return;
@@ -80,31 +111,162 @@ const Discussions = () => {
         projectTitle: selectedProject.title,
       })
     );
-  }, [dispatch, projectIdParam, selectedProject.id, selectedProject.title, setSearchParams]);
+  }, [
+    dispatch,
+    projectIdParam,
+    selectedProject,
+    setSearchParams,
+  ]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadThreads = async () => {
+      if (!selectedProjectId) {
+        return;
+      }
+
+      try {
+        const data = await apiRequest(`/projects/${selectedProjectId}/threads`);
+
+        if (!ignore && Array.isArray(data)) {
+          setBackendThreads((prev) => ({
+            ...prev,
+            [selectedProjectId]: data,
+          }));
+          setActiveBackendThreadByProject((prev) => ({
+            ...prev,
+            [selectedProjectId]: data[0]?.id ?? null,
+          }));
+        }
+      } catch {
+        if (!ignore) {
+          setBackendThreads((prev) => ({
+            ...prev,
+            [selectedProjectId]: null,
+          }));
+        }
+      }
+    };
+
+    loadThreads();
+
+    return () => {
+      ignore = true;
+    };
+  }, [selectedProjectId]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadMessages = async () => {
+      if (!activeThread?.id || !liveThreads) {
+        return;
+      }
+
+      try {
+        const data = await apiRequest(`/threads/${activeThread.id}/messages`);
+
+        if (!ignore && Array.isArray(data)) {
+          setBackendMessages((prev) => ({
+            ...prev,
+            [activeThread.id]: data.map((message) => ({
+              ...message,
+              sentAt: new Date(message.sentAt).toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              }),
+            })),
+          }));
+
+          if (currentUser?.id) {
+            await apiRequest(`/threads/${activeThread.id}/read`, {
+              method: "POST",
+            });
+          }
+        }
+      } catch {
+        // fallback to local discussion state
+      }
+    };
+
+    loadMessages();
+
+    return () => {
+      ignore = true;
+    };
+  }, [activeThread?.id, currentUser?.id, liveThreads]);
 
   const handleProjectSelect = (projectId) => {
     setSearchParams({ projectId: String(projectId) });
     setShowMobileInbox(false);
   };
 
-  const handleMessageSubmit = (event) => {
+  const handleMessageSubmit = async (event) => {
     event.preventDefault();
 
     if (!messageText.trim()) {
       return;
     }
 
-    dispatch(
-      addDiscussionMessage({
-        author: "Sonu Kumar",
-        message: messageText.trim(),
-        projectId: selectedProject.id,
-        projectTitle: selectedProject.title,
-        role: "Student Builder",
-      })
-    );
+    if (activeThread?.id && liveThreads) {
+      try {
+        const createdMessage = await apiRequest(`/threads/${activeThread.id}/messages`, {
+          method: "POST",
+          body: JSON.stringify({
+            message: messageText.trim(),
+          }),
+        });
+
+        setBackendMessages((prev) => ({
+          ...prev,
+          [activeThread.id]: [
+            ...(prev[activeThread.id] ?? []),
+            {
+              ...createdMessage,
+              sentAt: new Date(createdMessage.sentAt).toLocaleTimeString([], {
+                hour: "numeric",
+                minute: "2-digit",
+              }),
+            },
+          ],
+        }));
+      } catch {
+        dispatch(
+          addDiscussionMessage({
+            author: currentUser?.name ?? "Sonu Kumar",
+            message: messageText.trim(),
+            projectId: selectedProject.id,
+            projectTitle: selectedProject.title,
+            role: currentUser?.title ?? "Student Builder",
+          }),
+        );
+      }
+    } else {
+      dispatch(
+        addDiscussionMessage({
+          author: currentUser?.name ?? "Sonu Kumar",
+          message: messageText.trim(),
+          projectId: selectedProject.id,
+          projectTitle: selectedProject.title,
+          role: currentUser?.title ?? "Student Builder",
+        }),
+      );
+    }
+
     setMessageText("");
   };
+
+  if (!selectedProject) {
+    return (
+      <div className="mx-auto max-w-4xl rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <h1 className="text-xl font-semibold">No discussion rooms yet</h1>
+        <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          Discussion inbox is now backend-driven. Once projects and threads exist in the API, they will appear here.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 text-slate-900 dark:text-slate-100">
@@ -251,12 +413,19 @@ const Discussions = () => {
                           key={thread.id}
                           type="button"
                           onClick={() => {
-                            dispatch(
-                              setActiveDiscussionThread({
-                                projectId: selectedProject.id,
-                                threadId: thread.id,
-                              })
-                            );
+                            if (liveThreads) {
+                              setActiveBackendThreadByProject((prev) => ({
+                                ...prev,
+                                [selectedProjectId]: thread.id,
+                              }));
+                            } else {
+                              dispatch(
+                                setActiveDiscussionThread({
+                                  projectId: selectedProject.id,
+                                  threadId: thread.id,
+                                })
+                              );
+                            }
                             setShowMobileInbox(false);
                           }}
                           className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
@@ -282,7 +451,12 @@ const Discussions = () => {
                 </div>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                   {activeThread
-                    ? `Created by ${activeThread.createdBy} · ${activeThread.messages.length} messages`
+                    ? `Created by ${activeThread.createdBy} · ${
+                        selectedMessageList?.length ??
+                        activeThread.messageCount ??
+                        activeThread.messages?.length ??
+                        0
+                      } messages`
                     : "Start the channel conversation."}
                 </p>
               </div>
@@ -314,13 +488,18 @@ const Discussions = () => {
                         key={thread.id}
                         type="button"
                         onClick={() =>
-                          dispatch(
-                            setActiveDiscussionThread({
-                              projectId: selectedProject.id,
-                              threadId: thread.id,
-                            })
-                        )
-                      }
+                          liveThreads
+                            ? setActiveBackendThreadByProject((prev) => ({
+                                ...prev,
+                                [selectedProjectId]: thread.id,
+                              }))
+                            : dispatch(
+                                setActiveDiscussionThread({
+                                  projectId: selectedProject.id,
+                                  threadId: thread.id,
+                                })
+                              )
+                        }
                       className={`w-full rounded-lg border p-3 text-left transition ${
                         activeThread?.id === thread.id
                           ? "border-emerald-200 bg-white dark:border-emerald-500/20 dark:bg-[#404249]"
@@ -332,11 +511,17 @@ const Discussions = () => {
                           <Hash size={13} className="text-slate-400 dark:text-slate-500" />
                           {thread.title}
                         </p>
-                        <span className="text-[11px] text-slate-400">{thread.lastActivity}</span>
+                        <span className="text-[11px] text-slate-400">
+                          {typeof thread.lastActivity === "string"
+                            ? thread.lastActivity
+                            : new Date(thread.lastActivity).toLocaleDateString()}
+                        </span>
                       </div>
                         <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                           <Users size={12} />
-                          <span>{thread.messages.length} updates</span>
+                          <span>
+                            {thread.messageCount ?? thread.messages?.length ?? 0} updates
+                          </span>
                         </div>
                       </button>
                     ))}
@@ -353,11 +538,12 @@ const Discussions = () => {
                       <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
                     </div>
 
-                    {(activeThread?.messages || []).length > 0 ? (
+                    {(selectedMessageList || activeThread?.messages || []).length > 0 ? (
                       <div className="space-y-3">
-                        {(activeThread?.messages || []).map((discussion) => {
+                        {(selectedMessageList || activeThread?.messages || []).map((discussion) => {
                           const authorInitial = discussion.author.charAt(0).toUpperCase();
-                          const isCurrentUser = discussion.author === "Sonu Kumar";
+                          const isCurrentUser =
+                            discussion.author === (currentUser?.name ?? "Sonu Kumar");
 
                           return (
                             <div

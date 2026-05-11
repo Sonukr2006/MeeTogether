@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   Award,
+  Camera,
   BookmarkCheck,
   BriefcaseBusiness,
   CheckCircle2,
@@ -22,9 +23,20 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { projects } from "../../data/projects";
-import { proofProfile } from "../../data/proofProfile";
+import { emptyProfile } from "../../lib/uiDefaults";
+import { useAlert } from "../../contexts/AlertProvider";
+import {
+  apiRequest,
+  createUploadTarget,
+  uploadFileToStorageTarget,
+} from "../../lib/api";
 import { addRequestFromProfileAction } from "../../store/opportunityRequestsSlice";
+import { updateCurrentUserAvatar } from "../../store/authSlice";
+import {
+  fetchProfileByUsername,
+  updateCachedProfileAvatar,
+} from "../../store/profilesSlice";
+import { fetchProjects } from "../../store/projectsSlice";
 
 const profileIconMap = {
   briefcase: BriefcaseBusiness,
@@ -43,11 +55,57 @@ const profileIconMap = {
 };
 
 const Profile = () => {
+  const { userId } = useParams();
   const [activeAction, setActiveAction] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const fileInputRef = useRef(null);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { showAlert } = useAlert();
+  const currentUser = useSelector((state) => state.auth.currentUser);
   const { savedProjects } = useSelector((state) => state.projectInteractions);
-  const savedProjectList = projects.filter((project) => savedProjects[project.id]);
+  const projectCatalog = useSelector((state) => state.projects.items);
+  const profileEntry = useSelector((state) =>
+    userId ? state.profiles.byUsername[userId] : null,
+  );
+  const profileData = profileEntry?.profile ?? {
+    ...emptyProfile,
+    username: userId ?? emptyProfile.username,
+  };
+  const savedProjectList = useMemo(
+    () => projectCatalog.filter((project) => savedProjects[project.id]),
+    [projectCatalog, savedProjects],
+  );
+  const ownedProjects = useMemo(
+    () =>
+      projectCatalog.filter(
+        (project) =>
+          project.user.username === profileData.username ||
+          project.user.name === profileData.name,
+      ),
+    [profileData.name, profileData.username, projectCatalog],
+  );
+  const isOwnProfile = currentUser?.username === profileData.username;
+
+  useEffect(() => {
+    dispatch(fetchProjects());
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (userId) {
+      dispatch(fetchProfileByUsername(userId));
+    }
+  }, [dispatch, userId]);
+
+  if (profileEntry?.status === "loading" && !profileEntry?.profile) {
+    return (
+      <div className="mx-auto max-w-6xl rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
+          Loading proof profile...
+        </p>
+      </div>
+    );
+  }
 
   const closeAction = () => setActiveAction(null);
   const ActiveActionIcon = activeAction
@@ -56,12 +114,65 @@ const Profile = () => {
 
   const handleActionContinue = () => {
     if (activeAction?.intent === "resume") {
-      navigate(`/resume/${proofProfile.username}`);
+      navigate(`/resume/${profileData.username}`);
       return;
     }
 
     dispatch(addRequestFromProfileAction({ intent: activeAction.intent }));
     navigate("/requests");
+  };
+
+  const handleAvatarFileChange = async (event) => {
+    const file = event.target.files?.[0] ?? null;
+
+    if (!file) {
+      return;
+    }
+
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      showAlert("Use a JPG, PNG, or WebP image.", "error");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      showAlert("Avatar image must be 8 MB or smaller.", "error");
+      event.target.value = "";
+      return;
+    }
+
+    setUploadingAvatar(true);
+
+    try {
+      const target = await createUploadTarget({
+        entityType: "avatar",
+        fileName: file.name,
+        contentType: file.type,
+        fileSizeBytes: file.size,
+      });
+
+      await uploadFileToStorageTarget(target, file);
+      const updatedUser = await apiRequest("/users/me/avatar", {
+        method: "PATCH",
+        body: JSON.stringify({
+          avatar: target.cdnUrl,
+        }),
+      });
+
+      dispatch(updateCurrentUserAvatar(updatedUser.avatar));
+      dispatch(
+        updateCachedProfileAvatar({
+          username: updatedUser.username,
+          avatar: updatedUser.avatar,
+        }),
+      );
+      showAlert("Profile photo updated.", "success");
+    } catch (error) {
+      showAlert(error.message || "Avatar upload failed.", "error");
+    } finally {
+      setUploadingAvatar(false);
+      event.target.value = "";
+    }
   };
 
   return (
@@ -70,12 +181,41 @@ const Profile = () => {
         <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
           <div className="p-5 sm:p-6 lg:p-7">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-              <div className="relative h-28 w-28 shrink-0">
+              <div className="group relative h-28 w-28 shrink-0">
                 <img
-                  src={proofProfile.avatar}
-                  alt={proofProfile.name}
+                  src={profileData.avatar}
+                  alt={profileData.name}
                   className="h-28 w-28 rounded-full border border-slate-200 object-cover dark:border-slate-700"
                 />
+                {isOwnProfile ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingAvatar}
+                      className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/55 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-100 dark:bg-slate-950/65"
+                      aria-label={uploadingAvatar ? "Uploading profile image" : "Change profile image"}
+                    >
+                      {uploadingAvatar ? (
+                        <span className="flex items-center gap-1 rounded-full bg-black/35 px-3 py-1 text-xs font-semibold">
+                          <Clock3 size={13} />
+                          Uploading
+                        </span>
+                      ) : (
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black/35">
+                          <Camera size={18} />
+                        </span>
+                      )}
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={handleAvatarFileChange}
+                    />
+                  </>
+                ) : null}
                 <div className="absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full border-4 border-white bg-emerald-600 text-white dark:border-slate-900">
                   <ShieldCheck size={18} />
                 </div>
@@ -87,23 +227,23 @@ const Profile = () => {
                     Verified proof profile
                   </p>
                   <p className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    @{proofProfile.username}
+                    @{profileData.username}
                   </p>
                 </div>
                 <h1 className="mt-3 text-3xl font-semibold tracking-normal sm:text-4xl">
-                  {proofProfile.name}
+                  {profileData.name}
                 </h1>
                 <p className="mt-2 text-sm font-medium text-slate-600 dark:text-slate-300">
-                  {proofProfile.title}
+                  {profileData.title}
                 </p>
                 <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-500 dark:text-slate-400">
-                  {proofProfile.bio}
+                  {profileData.bio}
                 </p>
               </div>
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              {proofProfile.openTo.map((item) => (
+              {profileData.openTo.map((item) => (
                 <span
                   key={item}
                   className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 dark:border-slate-700 dark:text-slate-200"
@@ -115,7 +255,7 @@ const Profile = () => {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              {proofProfile.actions.map((action) => {
+              {profileData.actions.map((action) => {
                 const Icon = profileIconMap[action.iconKey] || ShieldCheck;
                 return (
                   <button
@@ -136,7 +276,7 @@ const Profile = () => {
             </div>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {proofProfile.links.map((link) => {
+              {profileData.links.map((link) => {
                 const Icon = profileIconMap[link.iconKey] || ExternalLink;
                 return (
                   <a
@@ -170,7 +310,7 @@ const Profile = () => {
                     Builder proof score
                   </p>
                   <p className="mt-2 text-5xl font-semibold tracking-normal">
-                    {proofProfile.proofScore}
+                    {profileData.proofScore}
                   </p>
                 </div>
                 <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-emerald-600 text-white">
@@ -179,16 +319,16 @@ const Profile = () => {
               </div>
               <div className="mt-5 flex items-center justify-between gap-3 rounded-lg bg-emerald-50 p-3 text-sm dark:bg-emerald-500/10">
                 <span className="font-semibold text-emerald-800 dark:text-emerald-200">
-                  {proofProfile.builderLevel}
+                  {profileData.builderLevel}
                 </span>
                 <span className="text-xs text-emerald-700 dark:text-emerald-300">
-                  {proofProfile.rank}
+                  {profileData.rank}
                 </span>
               </div>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
-              {proofProfile.stats.slice(1).map((stat) => {
+              {profileData.stats.slice(1).map((stat) => {
                 const Icon = profileIconMap[stat.iconKey] || ShieldCheck;
                 return (
                   <div
@@ -216,7 +356,7 @@ const Profile = () => {
                 <ShieldCheck className="text-emerald-600 dark:text-emerald-400" size={22} />
               </div>
               <div className="mt-4 space-y-3">
-                {proofProfile.trustSignals.map((signal) => {
+                {profileData.trustSignals.map((signal) => {
                   const Icon = profileIconMap[signal.iconKey] || ShieldCheck;
                   return (
                     <div key={signal.label} className="flex gap-3">
@@ -252,39 +392,50 @@ const Profile = () => {
             </div>
 
             <div className="mt-4 space-y-3">
-              {proofProfile.projects.map((project) => (
-                <article
-                  key={project.name}
-                  className="rounded-lg border border-slate-200 p-4 dark:border-slate-800"
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold">{project.name}</h3>
-                        <span className="rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
-                          {project.status}
-                        </span>
+              {ownedProjects.length > 0 ? (
+                ownedProjects.map((project) => (
+                  <article
+                    key={project.id}
+                    className="rounded-lg border border-slate-200 p-4 dark:border-slate-800"
+                  >
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="font-semibold">{project.title}</h3>
+                          <span className="rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
+                            {project.progress >= 100 ? "Shipped" : "Live build"}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                          {project.solution || project.problem || "Project proof is being assembled from backend records."}
+                        </p>
                       </div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                        {project.proof}
-                      </p>
-                    </div>
-                    <span className="shrink-0 rounded-md bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                      {project.score}
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {project.stack.map((tech) => (
-                      <span
-                        key={tech}
-                        className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300"
-                      >
-                        {tech}
+                      <span className="shrink-0 rounded-md bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                        {project.progress}% shipped
                       </span>
-                    ))}
-                  </div>
-                </article>
-              ))}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {project.techStack.map((tech) => (
+                        <span
+                          key={tech}
+                          className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                        >
+                          {tech}
+                        </span>
+                      ))}
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                    No shipped projects linked yet.
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                    This panel now reflects backend project ownership instead of local dummy records.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -363,30 +514,36 @@ const Profile = () => {
               <Code2 className="text-emerald-600 dark:text-emerald-400" size={22} />
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              {proofProfile.skills.map((skill) => (
-                <div
-                  key={skill.name}
-                  className="rounded-lg border border-slate-200 p-4 dark:border-slate-800"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold">{skill.name}</h3>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        {skill.evidence}
-                      </p>
+              {profileData.skills.length > 0 ? (
+                profileData.skills.map((skill) => (
+                  <div
+                    key={skill.name}
+                    className="rounded-lg border border-slate-200 p-4 dark:border-slate-800"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold">{skill.name}</h3>
+                        <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                          {skill.evidence}
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                        {skill.level ?? 0}%
+                      </span>
                     </div>
-                    <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                      {skill.level}%
-                    </span>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+                      <div
+                        className="h-full rounded-full bg-emerald-600"
+                        style={{ width: `${skill.level ?? 0}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
-                    <div
-                      className="h-full rounded-full bg-emerald-600"
-                      style={{ width: `${skill.level}%` }}
-                    />
-                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400 sm:col-span-2">
+                  No verified skills yet.
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
@@ -398,7 +555,7 @@ const Profile = () => {
               <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" size={21} />
             </div>
             <div className="mt-4 space-y-3">
-              {proofProfile.tasks.map((task) => (
+              {profileData.tasks.map((task) => (
                 <div key={task} className="flex gap-3 text-sm">
                   <CheckCircle2
                     className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400"
@@ -416,7 +573,7 @@ const Profile = () => {
               <GraduationCap className="text-emerald-600 dark:text-emerald-400" size={21} />
             </div>
             <div className="mt-4 space-y-4">
-              {proofProfile.reviews.map((review) => (
+              {profileData.reviews.map((review) => (
                 <article
                   key={review.mentor}
                   className="border-b border-slate-200 pb-4 last:border-0 last:pb-0 dark:border-slate-800"
@@ -442,7 +599,7 @@ const Profile = () => {
               <Clock3 className="text-emerald-600 dark:text-emerald-400" size={21} />
             </div>
             <div className="mt-4 space-y-4">
-              {proofProfile.timeline.map((item) => (
+              {profileData.timeline.map((item) => (
                 <div key={item.title} className="flex gap-3">
                   <div className="flex flex-col items-center">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
