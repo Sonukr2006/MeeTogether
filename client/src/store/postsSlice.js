@@ -52,6 +52,28 @@ const postsSlice = createSlice({
       state.lastFetchedAt = Date.now();
       state.error = null;
     },
+    updatePostLikeState: (state, action) => {
+      const { postId, likesCount } = action.payload;
+      const item = state.items.find((entry) => entry.id === postId);
+
+      if (!item) {
+        return;
+      }
+
+      item.likes = likesCount;
+      state.lastFetchedAt = Date.now();
+    },
+    adjustPostLikeState: (state, action) => {
+      const { postId, delta } = action.payload;
+      const item = state.items.find((entry) => entry.id === postId);
+
+      if (!item) {
+        return;
+      }
+
+      item.likes = Math.max(0, (item.likes ?? 0) + delta);
+      state.lastFetchedAt = Date.now();
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -72,5 +94,11 @@ const postsSlice = createSlice({
   },
 });
 
-export const { invalidatePostsCache, prependPostCard } = postsSlice.actions;
+export const {
+  invalidatePostsCache,
+  prependPostCard,
+  updatePostLikeState,
+  adjustPostLikeState,
+} =
+  postsSlice.actions;
 export default postsSlice.reducer;

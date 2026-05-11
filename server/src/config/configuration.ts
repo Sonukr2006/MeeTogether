@@ -27,6 +27,13 @@ export default () => ({
     cloudFrontBaseUrl: process.env.CLOUDFRONT_BASE_URL ?? '',
     uploadUrlTtlSeconds: Number(process.env.S3_UPLOAD_URL_TTL_SECONDS ?? 300),
   },
+  likes: {
+    provider: process.env.LIKE_WRITE_PROVIDER ?? 'direct',
+    upstashRestUrl: process.env.UPSTASH_REDIS_REST_URL ?? '',
+    upstashRestToken: process.env.UPSTASH_REDIS_REST_TOKEN ?? '',
+    queuePollIntervalMs: Number(process.env.LIKE_QUEUE_POLL_INTERVAL_MS ?? 750),
+    queueTtlSeconds: Number(process.env.LIKE_QUEUE_TTL_SECONDS ?? 300),
+  },
   clientOrigins: (process.env.CLIENT_ORIGIN ?? 'http://localhost:5173')
     .split(',')
     .map((origin) => origin.trim())

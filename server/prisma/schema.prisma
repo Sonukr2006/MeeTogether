@@ -71,6 +71,8 @@ model User {
   createdIssues               Issue[]           @relation("CreatedIssues")
   assignedIssues              Issue[]           @relation("AssignedIssues")
   posts                       Post[]
+  postLikes                   PostLike[]
+  projectLikes                ProjectLike[]
 }
 
 model Session {
@@ -161,6 +163,7 @@ model Project {
   mentorStatus  String?
   githubUrl     String?
   demoUrl       String?
+  likesCount    Int             @default(0)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   owner         User            @relation("OwnedProjects", fields: [ownerUserId], references: [id], onDelete: Cascade)
@@ -173,6 +176,7 @@ model Project {
   issues        Issue[]
   deployments   Deployment[]
   posts         Post[]
+  likes         ProjectLike[]
 
   @@index([ownerUserId])
 }
@@ -353,6 +357,7 @@ model Post {
   project       Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   links         PostLink[]
   tags          PostTag[]
+  likes         PostLike[]
 
   @@index([authorUserId, createdAt])
   @@index([projectId, createdAt])
@@ -378,4 +383,28 @@ model PostLink {
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@index([postId, sortOrder])
+}
+
+model PostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([userId])
+}
+
+model ProjectLike {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
 }

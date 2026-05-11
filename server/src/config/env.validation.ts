@@ -100,6 +100,28 @@ class EnvVariables {
   @IsInt()
   @Min(60)
   S3_UPLOAD_URL_TTL_SECONDS?: number;
+
+  @IsOptional()
+  @IsIn(['direct', 'upstash'])
+  LIKE_WRITE_PROVIDER?: string;
+
+  @IsOptional()
+  @IsString()
+  UPSTASH_REDIS_REST_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  UPSTASH_REDIS_REST_TOKEN?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(100)
+  LIKE_QUEUE_POLL_INTERVAL_MS?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(30)
+  LIKE_QUEUE_TTL_SECONDS?: number;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

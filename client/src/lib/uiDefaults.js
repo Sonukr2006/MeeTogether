@@ -147,6 +147,8 @@ export const emptyProjectCard = {
   mentorStatus: "Mentor status not set",
   github: "https://github.com/",
   demo: "https://example.com/",
+  likes: 0,
+  comments: 0,
   tags: [],
   tasks: [],
   milestones: [],

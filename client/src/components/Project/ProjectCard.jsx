@@ -4,22 +4,28 @@ import { Link } from "react-router-dom";
 import {
   Bookmark,
   ExternalLink,
-  MessageCircle,
+  MessagesSquare,
   Rocket,
   Sparkles,
-  ThumbsUp,
   Users,
 } from "lucide-react";
 import { ensureDiscussionThread } from "../../store/projectDiscussionsSlice";
 import {
   openAnalyzePanel,
-  toggleProjectLike,
+  setProjectLikedState,
+  toggleLiveProjectLike,
   toggleProjectSave,
 } from "../../store/projectInteractionsSlice";
+import {
+  adjustProjectLikeState,
+  updateProjectLikeState,
+} from "../../store/projectsSlice";
 import CardMetaRow from "../ui/CardMetaRow";
 import ExpandableText from "../ui/ExpandableText";
 import ProjectDetailsPanel from "../ui/ProjectDetailsPanel";
 import ProjectInsightsPanel from "../ui/ProjectInsightsPanel";
+import CommentActionButton from "../ui/CommentActionButton";
+import LikeActionButton from "../ui/LikeActionButton";
 import SignalGrid from "../ui/SignalGrid";
 import TagList from "../ui/TagList";
 import UserMiniProfile from "../ui/UserMiniProfile";
@@ -36,6 +42,10 @@ export default function ProjectCard({ project }) {
   const liked = Boolean(likedProjects[project.id]);
   const saved = Boolean(savedProjects[project.id]);
   const showAnalyzePanel = activeAnalyzeProjectId === project.id;
+  const likeCount = project.likes ?? 0;
+  const discussionCount = project.comments ?? (
+    Array.isArray(project.discussions) ? project.discussions.length : 0
+  );
 
   const roomSignals = [
     { label: `${project.progress}% shipped`, icon: Rocket },
@@ -132,40 +142,74 @@ export default function ProjectCard({ project }) {
 
 
         <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-4 border-t border-slate-200 pt-3 text-sm dark:border-slate-800">
-            <button
-              type="button"
-              onClick={() => dispatch(toggleProjectLike(project.id))}
-              className={`inline-flex items-center gap-1.5 transition hover:text-emerald-600 dark:hover:text-emerald-400 ${
-                liked
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-slate-500 dark:text-slate-400"
-              }`}
-            >
-              <ThumbsUp size={16} fill={liked ? "currentColor" : "none"} />
-              <span>{liked ? "Liked" : "Like"}</span>
-            </button>
+          <div className="flex flex-wrap items-center gap-5 border-t border-slate-200 pt-3 text-sm dark:border-slate-800">
+            <LikeActionButton
+              liked={liked}
+              count={likeCount}
+              label="Like"
+              activeLabel="Liked"
+              onClick={async () => {
+                const nextLiked = !liked;
+                const delta = nextLiked ? 1 : -1;
+
+                dispatch(setProjectLikedState({ projectId: project.id, liked: nextLiked }));
+                dispatch(adjustProjectLikeState({ projectId: project.id, delta }));
+
+                try {
+                  const result = await dispatch(
+                    toggleLiveProjectLike({ projectId: project.id, liked: nextLiked }),
+                  ).unwrap();
+                  dispatch(
+                    setProjectLikedState({ projectId: project.id, liked: result.liked }),
+                  );
+                  if (typeof result.likesCount === "number") {
+                    dispatch(updateProjectLikeState(result));
+                  }
+                } catch (error) {
+                  dispatch(setProjectLikedState({ projectId: project.id, liked }));
+                  dispatch(adjustProjectLikeState({ projectId: project.id, delta: -delta }));
+                }
+              }}
+            />
+
+            <CommentActionButton
+              count={discussionCount}
+              label="Comments"
+              ariaLabel={`Open project comments${discussionCount ? `, ${discussionCount} discussions` : ""}`}
+              component={Link}
+              componentProps={{
+                to: `/discussions?projectId=${project.id}`,
+                onClick: () =>
+                  dispatch(
+                    ensureDiscussionThread({
+                      authorName: "Sonu Kumar",
+                      projectId: project.id,
+                      projectTitle: project.title,
+                    })
+                  ),
+              }}
+            />
 
             <button
               type="button"
               onClick={() => dispatch(toggleProjectSave(project.id))}
-              className={`inline-flex items-center gap-1.5 transition hover:text-emerald-600 dark:hover:text-emerald-400 ${
+              className={`inline-flex items-center justify-center transition hover:text-emerald-600 dark:hover:text-emerald-400 ${
                 saved
                   ? "text-emerald-600 dark:text-emerald-400"
                   : "text-slate-500 dark:text-slate-400"
               }`}
+              aria-label={saved ? "Saved project" : "Save project"}
             >
               <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
-              <span>{saved ? "Saved" : "Save"}</span>
             </button>
 
             <button
               type="button"
               onClick={() => dispatch(openAnalyzePanel(project.id))}
-              className="inline-flex items-center gap-1.5 text-slate-500 transition hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
+              className="inline-flex items-center justify-center text-slate-500 transition hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
+              aria-label={showAnalyzePanel ? "Analyzed project" : "Analyze project"}
             >
               <Sparkles size={16} />
-              <span>{showAnalyzePanel ? "Analyzed" : "Analyze"}</span>
             </button>
           </div>
 
@@ -181,14 +225,14 @@ export default function ProjectCard({ project }) {
                   })
                 )
               }
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
             >
-              <MessageCircle size={14} />
+              <MessagesSquare size={14} />
               Discuss
             </Link>
             <Link
               to={`/projects/${project.id}`}
-              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-700"
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-emerald-700"
             >
               <ExternalLink size={14} />
               View

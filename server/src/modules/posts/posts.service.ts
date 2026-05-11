@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma, PostType } from '@prisma/client';
 import { TtlCache } from 'src/common/utils/ttl-cache';
+import { LikesService } from '../likes/likes.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
 
@@ -37,10 +38,33 @@ type PostWithRelations = Prisma.PostGetPayload<{
 }>;
 
 @Injectable()
-export class PostsService {
+export class PostsService implements OnModuleInit, OnModuleDestroy {
   private readonly postsFeedCache = new TtlCache<ReturnType<PostsService['toFeedPost']>[]>(30_000);
+  private readonly logger = new Logger(PostsService.name);
+  private queueTimer: NodeJS.Timeout | null = null;
+  private isProcessingQueue = false;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly likesService: LikesService,
+  ) {}
+
+  onModuleInit() {
+    if (!this.likesService.isQueueEnabled()) {
+      return;
+    }
+
+    this.queueTimer = setInterval(() => {
+      void this.processQueuedLikes();
+    }, this.likesService.getPollIntervalMs());
+  }
+
+  onModuleDestroy() {
+    if (this.queueTimer) {
+      clearInterval(this.queueTimer);
+      this.queueTimer = null;
+    }
+  }
 
   async getFeedPosts() {
     const cached = this.postsFeedCache.get('feed');
@@ -116,6 +140,157 @@ export class PostsService {
 
     this.postsFeedCache.clear();
     return this.toFeedPost(created);
+  }
+
+  async setLikeState(postId: string, userId: string, liked: boolean) {
+    if (!this.likesService.isQueueEnabled()) {
+      return this.applyLikeState(postId, userId, liked);
+    }
+
+    await this.likesService.enqueue({
+      entityType: 'post',
+      entityId: postId,
+      userId,
+      liked,
+    });
+
+    return {
+      postId,
+      liked,
+      queued: true,
+    };
+  }
+
+  async applyLikeState(postId: string, userId: string, liked: boolean) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const post = await tx.post.findUnique({
+        where: { id: postId },
+        select: { id: true },
+      });
+
+      if (!post) {
+        throw new NotFoundException('Post not found');
+      }
+
+      const existing = await tx.postLike.findUnique({
+        where: {
+          postId_userId: {
+            postId,
+            userId,
+          },
+        },
+      });
+
+      if (existing && !liked) {
+        await tx.postLike.delete({
+          where: { id: existing.id },
+        });
+
+        const updated = await tx.post.update({
+          where: { id: postId },
+          data: {
+            likesCount: {
+              decrement: 1,
+            },
+          },
+          select: {
+            likesCount: true,
+          },
+        });
+
+        return {
+          liked: false,
+          likesCount: Math.max(0, updated.likesCount),
+        };
+      }
+
+      if (existing && liked) {
+        const current = await tx.post.findUniqueOrThrow({
+          where: { id: postId },
+          select: { likesCount: true },
+        });
+
+        return {
+          liked: true,
+          likesCount: current.likesCount,
+        };
+      }
+
+      if (!existing && !liked) {
+        const current = await tx.post.findUniqueOrThrow({
+          where: { id: postId },
+          select: { likesCount: true },
+        });
+
+        return {
+          liked: false,
+          likesCount: current.likesCount,
+        };
+      }
+
+      await tx.postLike.create({
+        data: {
+          postId,
+          userId,
+        },
+      });
+
+      const updated = await tx.post.update({
+        where: { id: postId },
+        data: {
+          likesCount: {
+            increment: 1,
+          },
+        },
+        select: {
+          likesCount: true,
+        },
+      });
+
+      return {
+        liked: true,
+        likesCount: updated.likesCount,
+      };
+    });
+
+    this.postsFeedCache.clear();
+    return {
+      postId,
+      ...result,
+    };
+  }
+
+  private async processQueuedLikes() {
+    if (this.isProcessingQueue) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+
+    try {
+      for (let index = 0; index < 20; index += 1) {
+        const intent = await this.likesService.popIntent('post');
+        if (!intent) {
+          break;
+        }
+
+        try {
+          await this.applyLikeState(intent.entityId, intent.userId, intent.liked);
+        } catch (error) {
+          if (error instanceof NotFoundException) {
+            this.logger.warn(`Skipping queued post like for missing post ${intent.entityId}`);
+            continue;
+          }
+
+          throw error;
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown queue failure';
+      this.logger.warn(`Post likes queue processing failed: ${message}`);
+    } finally {
+      this.isProcessingQueue = false;
+    }
   }
 
   private toFeedPost(post: PostWithRelations) {

@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TtlCache } from 'src/common/utils/ttl-cache';
+import { LikesService } from '../likes/likes.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 
@@ -51,11 +52,34 @@ type ProjectWithRelations = Prisma.ProjectGetPayload<{
 }>;
 
 @Injectable()
-export class ProjectsService {
+export class ProjectsService implements OnModuleInit, OnModuleDestroy {
   private readonly projectsListCache = new TtlCache<ReturnType<ProjectsService['toProjectSummary']>[]>(30_000);
   private readonly projectDetailCache = new TtlCache<ReturnType<ProjectsService['toProjectDetail']>>(30_000);
+  private readonly logger = new Logger(ProjectsService.name);
+  private queueTimer: NodeJS.Timeout | null = null;
+  private isProcessingQueue = false;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly likesService: LikesService,
+  ) {}
+
+  onModuleInit() {
+    if (!this.likesService.isQueueEnabled()) {
+      return;
+    }
+
+    this.queueTimer = setInterval(() => {
+      void this.processQueuedLikes();
+    }, this.likesService.getPollIntervalMs());
+  }
+
+  onModuleDestroy() {
+    if (this.queueTimer) {
+      clearInterval(this.queueTimer);
+      this.queueTimer = null;
+    }
+  }
 
   async getProjects() {
     const cached = this.projectsListCache.get('all');
@@ -205,6 +229,159 @@ export class ProjectsService {
     return detail;
   }
 
+  async setLikeState(projectId: string, userId: string, liked: boolean) {
+    if (!this.likesService.isQueueEnabled()) {
+      return this.applyLikeState(projectId, userId, liked);
+    }
+
+    await this.likesService.enqueue({
+      entityType: 'project',
+      entityId: projectId,
+      userId,
+      liked,
+    });
+
+    return {
+      projectId,
+      liked,
+      queued: true,
+    };
+  }
+
+  async applyLikeState(projectId: string, userId: string, liked: boolean) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const project = await tx.project.findUnique({
+        where: { id: projectId },
+        select: { id: true },
+      });
+
+      if (!project) {
+        throw new NotFoundException('Project not found');
+      }
+
+      const existing = await tx.projectLike.findUnique({
+        where: {
+          projectId_userId: {
+            projectId,
+            userId,
+          },
+        },
+      });
+
+      if (existing && !liked) {
+        await tx.projectLike.delete({
+          where: { id: existing.id },
+        });
+
+        const updated = await tx.project.update({
+          where: { id: projectId },
+          data: {
+            likesCount: {
+              decrement: 1,
+            },
+          },
+          select: {
+            likesCount: true,
+          },
+        });
+
+        return {
+          liked: false,
+          likesCount: Math.max(0, updated.likesCount),
+        };
+      }
+
+      if (existing && liked) {
+        const current = await tx.project.findUniqueOrThrow({
+          where: { id: projectId },
+          select: { likesCount: true },
+        });
+
+        return {
+          liked: true,
+          likesCount: current.likesCount,
+        };
+      }
+
+      if (!existing && !liked) {
+        const current = await tx.project.findUniqueOrThrow({
+          where: { id: projectId },
+          select: { likesCount: true },
+        });
+
+        return {
+          liked: false,
+          likesCount: current.likesCount,
+        };
+      }
+
+      await tx.projectLike.create({
+        data: {
+          projectId,
+          userId,
+        },
+      });
+
+      const updated = await tx.project.update({
+        where: { id: projectId },
+        data: {
+          likesCount: {
+            increment: 1,
+          },
+        },
+        select: {
+          likesCount: true,
+        },
+      });
+
+      return {
+        liked: true,
+        likesCount: updated.likesCount,
+      };
+    });
+
+    this.projectsListCache.clear();
+    this.projectDetailCache.clear(projectId);
+
+    return {
+      projectId,
+      ...result,
+    };
+  }
+
+  private async processQueuedLikes() {
+    if (this.isProcessingQueue) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+
+    try {
+      for (let index = 0; index < 20; index += 1) {
+        const intent = await this.likesService.popIntent('project');
+        if (!intent) {
+          break;
+        }
+
+        try {
+          await this.applyLikeState(intent.entityId, intent.userId, intent.liked);
+        } catch (error) {
+          if (error instanceof NotFoundException) {
+            this.logger.warn(`Skipping queued project like for missing project ${intent.entityId}`);
+            continue;
+          }
+
+          throw error;
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown queue failure';
+      this.logger.warn(`Project likes queue processing failed: ${message}`);
+    } finally {
+      this.isProcessingQueue = false;
+    }
+  }
+
   private toProjectSummary(project: ProjectWithRelations & { _count?: { members: number } }) {
     return {
       id: project.id,
@@ -219,6 +396,7 @@ export class ProjectsService {
       mentorStatus: project.mentorStatus,
       githubUrl: project.githubUrl,
       demoUrl: project.demoUrl,
+      likes: project.likesCount,
       owner: project.owner,
       contributorsCount: project._count?.members ?? project.members.length,
       techStack: project.techTags.map((tag: ProjectWithRelations['techTags'][number]) => tag.value),

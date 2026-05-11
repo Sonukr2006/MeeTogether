@@ -9,6 +9,7 @@ import { DiscussionsModule } from './modules/discussions/discussions.module';
 import { EmailModule } from './modules/email/email.module';
 import { HealthModule } from './modules/health/health.module';
 import { IssuesModule } from './modules/issues/issues.module';
+import { LikesModule } from './modules/likes/likes.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
 import { PostsModule } from './modules/posts/posts.module';
 import { ProjectsModule } from './modules/projects/projects.module';
@@ -31,6 +32,7 @@ import { UsersModule } from './modules/users/users.module';
     EmailModule,
     HealthModule,
     IssuesModule,
+    LikesModule,
     UsersModule,
     ProfilesModule,
     PostsModule,

@@ -60,6 +60,28 @@ const projectsSlice = createSlice({
       state.lastFetchedAt = Date.now();
       state.error = null;
     },
+    updateProjectLikeState: (state, action) => {
+      const { projectId, likesCount } = action.payload;
+      const item = state.items.find((entry) => entry.id === projectId);
+
+      if (!item) {
+        return;
+      }
+
+      item.likes = likesCount;
+      state.lastFetchedAt = Date.now();
+    },
+    adjustProjectLikeState: (state, action) => {
+      const { projectId, delta } = action.payload;
+      const item = state.items.find((entry) => entry.id === projectId);
+
+      if (!item) {
+        return;
+      }
+
+      item.likes = Math.max(0, (item.likes ?? 0) + delta);
+      state.lastFetchedAt = Date.now();
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -80,5 +102,11 @@ const projectsSlice = createSlice({
   },
 });
 
-export const { invalidateProjectsCache, upsertProjectCard } = projectsSlice.actions;
+export const {
+  invalidateProjectsCache,
+  upsertProjectCard,
+  updateProjectLikeState,
+  adjustProjectLikeState,
+} =
+  projectsSlice.actions;
 export default projectsSlice.reducer;

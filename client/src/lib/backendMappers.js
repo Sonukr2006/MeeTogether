@@ -57,6 +57,8 @@ export function mapApiProjectToCard(project) {
     mentorStatus: project.mentorStatus ?? "Mentor status not set",
     github: project.githubUrl ?? "https://github.com/",
     demo: project.demoUrl ?? "https://example.com/",
+    likes: project.likes ?? 0,
+    comments: project.comments ?? 0,
     tags: project.tags ?? [],
     tasks: [],
     milestones: [],
@@ -114,6 +116,13 @@ export function mapApiProjectToDetail(project, fallbackProject) {
     openRoles: project.openRoles ?? fallbackProject?.openRoles ?? [],
     github: project.githubUrl ?? fallbackProject?.github ?? "https://github.com/",
     demo: project.demoUrl ?? fallbackProject?.demo ?? "https://example.com/",
+    likes: project.likes ?? fallbackProject?.likes ?? 0,
+    comments:
+      project.comments ??
+      project.discussions?.length ??
+      fallbackProject?.comments ??
+      fallbackProject?.discussions?.length ??
+      0,
     tags: project.tags ?? fallbackProject?.tags ?? [],
     tasks: fallbackProject?.tasks ?? [],
     milestones: fallbackProject?.milestones ?? [],

@@ -16,9 +16,11 @@ import CommentModal from "./CommentModal";
 import PostActions from "./PostActions";
 import {
   openComments,
-  toggleLike,
+  setPostLikedState,
+  togglePostLike,
   toggleSave,
 } from "../../store/postInteractionsSlice";
+import { adjustPostLikeState, updatePostLikeState } from "../../store/postsSlice";
 import CardMetaRow from "../ui/CardMetaRow";
 import ExpandableText from "../ui/ExpandableText";
 import SignalGrid from "../ui/SignalGrid";
@@ -34,8 +36,6 @@ export default function PostCard({ post }) {
   const liked = Boolean(likedPosts[post.id]);
   const saved = Boolean(savedPosts[post.id]);
   const showComments = activeCommentsPostId === post.id;
-  const likes = liked ? post.likes + 1 : post.likes;
-
   const typeStyles = {
     "Build Log": {
       icon: Wrench,
@@ -88,7 +88,7 @@ export default function PostCard({ post }) {
   };
   const TypeIcon = postType.icon;
   const proofSignals = [
-    { icon: Users, label: `${likes} builders backed` },
+    { icon: Users, label: `${post.likes} builders backed` },
     { icon: MessageSquareText, label: `${post.comments} discussion points` },
     { icon: Tags, label: `${post.tags.length} proof tags` },
   ];
@@ -196,10 +196,29 @@ export default function PostCard({ post }) {
             <PostActions
               comments={post.comments}
               liked={liked}
-              likes={likes}
+              likes={post.likes}
               saved={saved}
               onCommentClick={() => dispatch(openComments(post.id))}
-              onLikeClick={() => dispatch(toggleLike(post.id))}
+              onLikeClick={async () => {
+                const nextLiked = !liked;
+                const delta = nextLiked ? 1 : -1;
+
+                dispatch(setPostLikedState({ postId: post.id, liked: nextLiked }));
+                dispatch(adjustPostLikeState({ postId: post.id, delta }));
+
+                try {
+                  const result = await dispatch(
+                    togglePostLike({ postId: post.id, liked: nextLiked }),
+                  ).unwrap();
+                  dispatch(setPostLikedState({ postId: post.id, liked: result.liked }));
+                  if (typeof result.likesCount === "number") {
+                    dispatch(updatePostLikeState(result));
+                  }
+                } catch (error) {
+                  dispatch(setPostLikedState({ postId: post.id, liked }));
+                  dispatch(adjustPostLikeState({ postId: post.id, delta: -delta }));
+                }
+              }}
               onSaveClick={() => dispatch(toggleSave(post.id))}
             />
 
