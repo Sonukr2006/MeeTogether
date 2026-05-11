@@ -2,12 +2,16 @@ import {
   ArrayMaxSize,
   IsArray,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { CreatePostLinkDto } from './create-post-link.dto';
 
 export class CreatePostDto {
   @IsString()
@@ -44,4 +48,12 @@ export class CreatePostDto {
   @IsString({ each: true })
   @MaxLength(30, { each: true })
   tags?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(4)
+  @ValidateNested({ each: true })
+  @Type(() => CreatePostLinkDto)
+  @IsObject({ each: true })
+  links?: CreatePostLinkDto[];
 }

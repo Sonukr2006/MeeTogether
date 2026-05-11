@@ -25,6 +25,11 @@ const postInclude = {
       sortOrder: 'asc' as const,
     },
   },
+  links: {
+    orderBy: {
+      sortOrder: 'asc' as const,
+    },
+  },
 } as const;
 
 type PostWithRelations = Prisma.PostGetPayload<{
@@ -68,6 +73,7 @@ export class PostsService {
     }
 
     const normalizedTags = this.normalizeStringArray(createPostDto.tags);
+    const normalizedLinks = this.normalizeLinks(createPostDto.links);
 
     const created = await this.prisma.$transaction(async (tx) => {
       const post = await tx.post.create({
@@ -86,6 +92,17 @@ export class PostsService {
           data: normalizedTags.map((value, index) => ({
             postId: post.id,
             value,
+            sortOrder: index + 1,
+          })),
+        });
+      }
+
+      if (normalizedLinks.length > 0) {
+        await tx.postLink.createMany({
+          data: normalizedLinks.map((link, index) => ({
+            postId: post.id,
+            label: link.label,
+            url: link.url,
             sortOrder: index + 1,
           })),
         });
@@ -111,6 +128,10 @@ export class PostsService {
       likes: post.likesCount,
       comments: post.commentsCount,
       tags: post.tags.map((tag) => tag.value),
+      links: post.links.map((link) => ({
+        label: link.label,
+        url: link.url,
+      })),
       linkedProject: post.project
         ? {
             id: post.project.id,
@@ -170,6 +191,25 @@ export class PostsService {
       .filter((value) => value.length > 0)
       .filter((value) => {
         const normalized = value.toLowerCase();
+        if (seen.has(normalized)) {
+          return false;
+        }
+        seen.add(normalized);
+        return true;
+      });
+  }
+
+  private normalizeLinks(values?: { label: string; url: string }[]) {
+    const seen = new Set<string>();
+
+    return (values ?? [])
+      .map((value) => ({
+        label: value.label.trim(),
+        url: value.url.trim(),
+      }))
+      .filter((value) => value.label.length > 0 && value.url.length > 0)
+      .filter((value) => {
+        const normalized = `${value.label.toLowerCase()}::${value.url.toLowerCase()}`;
         if (seen.has(normalized)) {
           return false;
         }

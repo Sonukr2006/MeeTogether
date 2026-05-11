@@ -2,6 +2,7 @@ import { useDispatch, useSelector } from "react-redux";
 import {
   ArrowUpRight,
   ClipboardCheck,
+  ExternalLink,
   HelpCircle,
   Lightbulb,
   MessageSquareText,
@@ -101,10 +102,11 @@ export default function PostCard({ post }) {
             : "z-0 hover:-translate-y-1 hover:shadow-md"
         }`}
       >
-        <div
-          className={`pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-r ${postType.accent}`}
-          aria-hidden="true"
-        />
+        <div className="absolute inset-0 overflow-hidden rounded-lg" aria-hidden="true">
+          <div
+            className={`pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-r ${postType.accent}`}
+          />
+        </div>
 
         <div className="relative">
           <CardMetaRow
@@ -167,6 +169,23 @@ export default function PostCard({ post }) {
               className="mb-4 h-56 w-full rounded-lg object-cover"
             />
           )}
+
+          {post.links?.length ? (
+            <div className="mb-4 flex flex-wrap gap-2">
+              {post.links.map((link) => (
+                <a
+                  key={`${post.id}-${link.label}-${link.url}`}
+                  href={link.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
+                >
+                  <ExternalLink size={12} />
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          ) : null}
 
           <TagList
             items={post.tags}

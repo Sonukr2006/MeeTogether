@@ -26,6 +26,9 @@ const initialForm = {
   type: "Professional Update",
   title: "",
   description: "",
+  linkLabelInput: "",
+  linkUrlInput: "",
+  links: [],
   tagInput: "",
   tags: [],
   projectId: "",
@@ -104,10 +107,51 @@ export default function CreatePostPage() {
     });
   };
 
+  const addLinkValue = () => {
+    const label = form.linkLabelInput.trim();
+    const url = form.linkUrlInput.trim();
+
+    if (!label || !url) {
+      setErrors((current) => ({
+        ...current,
+        links: "Add both a link name and a valid URL.",
+      }));
+      return;
+    }
+
+    try {
+      new URL(url);
+    } catch {
+      setErrors((current) => ({
+        ...current,
+        links: "Use a valid URL for the link.",
+      }));
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      links: [...current.links, { label, url }],
+      linkLabelInput: "",
+      linkUrlInput: "",
+    }));
+    setErrors((current) => ({
+      ...current,
+      links: undefined,
+    }));
+  };
+
   const removeTagValue = (valueToRemove) => {
     setForm((current) => ({
       ...current,
       tags: current.tags.filter((value) => value !== valueToRemove),
+    }));
+  };
+
+  const removeLinkValue = (indexToRemove) => {
+    setForm((current) => ({
+      ...current,
+      links: current.links.filter((_, index) => index !== indexToRemove),
     }));
   };
 
@@ -211,6 +255,7 @@ export default function CreatePostPage() {
           description: form.description.trim(),
           imageUrl: imageUrl || undefined,
           projectId: form.projectId || undefined,
+          links: form.links,
           tags: form.tags,
         }),
       });
@@ -391,6 +436,57 @@ export default function CreatePostPage() {
                     <X size={12} />
                   </button>
                 </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <h2 className="text-lg font-semibold">Links</h2>
+          <div className="mt-4 space-y-4">
+            <div className="grid gap-2 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)_auto]">
+              <input
+                value={form.linkLabelInput}
+                onChange={(event) => updateField("linkLabelInput", event.target.value)}
+                className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950"
+                placeholder="Link name e.g. Live Demo"
+              />
+              <input
+                value={form.linkUrlInput}
+                onChange={(event) => updateField("linkUrlInput", event.target.value)}
+                className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none transition focus:border-emerald-500 dark:border-slate-700 dark:bg-slate-950"
+                placeholder="https://..."
+              />
+              <button
+                type="button"
+                onClick={addLinkValue}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+              >
+                <PlusCircle size={16} />
+                Add
+              </button>
+            </div>
+            {errors.links ? (
+              <p className="text-xs text-rose-600">{errors.links}</p>
+            ) : null}
+            <div className="flex flex-col gap-2">
+              {form.links.map((link, index) => (
+                <div
+                  key={`${link.label}-${link.url}-${index}`}
+                  className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium text-slate-800 dark:text-slate-100">
+                      {link.label}
+                    </p>
+                    <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+                      {link.url}
+                    </p>
+                  </div>
+                  <button type="button" onClick={() => removeLinkValue(index)}>
+                    <X size={14} />
+                  </button>
+                </div>
               ))}
             </div>
           </div>

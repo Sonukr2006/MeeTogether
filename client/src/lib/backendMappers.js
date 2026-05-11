@@ -77,6 +77,7 @@ export function mapApiPostToCard(post) {
     likes: post.likes ?? 0,
     comments: post.comments ?? 0,
     tags: post.tags ?? [],
+    links: post.links ?? [],
     linkedProject: post.linkedProject?.title ?? null,
     linkedProjectId: post.linkedProject?.id ?? null,
     user: {

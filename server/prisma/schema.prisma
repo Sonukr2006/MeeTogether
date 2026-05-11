@@ -351,6 +351,7 @@ model Post {
   updatedAt     DateTime  @updatedAt
   author        User      @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
   project       Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  links         PostLink[]
   tags          PostTag[]
 
   @@index([authorUserId, createdAt])
@@ -362,6 +363,17 @@ model PostTag {
   id        String   @id @default(cuid())
   postId     String
   value     String
+  sortOrder Int      @default(0)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([postId, sortOrder])
+}
+
+model PostLink {
+  id        String   @id @default(cuid())
+  postId    String
+  label     String
+  url       String
   sortOrder Int      @default(0)
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
 
