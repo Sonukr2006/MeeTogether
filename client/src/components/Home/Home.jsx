@@ -29,8 +29,8 @@ const Home = () => {
     (projectsStatus === "loading" || postsStatus === "loading") && feedItems.length === 0;
 
   return (
-    <div className="min-h-screen p-4 scroll-smooth text-slate-900 dark:text-slate-100">
-      <div className="mx-auto mb-5 max-w-5xl">
+    <div className="min-h-screen px-1 py-4 scroll-smooth text-slate-900 dark:text-slate-100 md:px-4">
+      <div className="mb-5 px-0.5 md:mx-auto md:max-w-5xl md:px-0">
         <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
           Proof-of-work collaboration
         </p>
@@ -39,22 +39,26 @@ const Home = () => {
 
       {isInitialLoading ? (
         <PageLoadingState
-          className="max-w-5xl"
+          className="md:max-w-5xl"
           title="Loading the build feed"
           message="We’re pulling live projects and builder updates from the backend."
         />
       ) : feedItems.length > 0 ? (
-        <div className="grid grid-cols-1 gap-x-4 gap-y-0 max-w-5xl mx-auto md:grid-cols-2">
+        <div className="columns-1 gap-2 px-0.5 md:mx-auto md:max-w-5xl md:columns-2 md:gap-4 md:px-0">
           {feedItems.map((item) =>
             item.kind === "post" ? (
-              <PostCard key={`post-${item.id}`} post={item} />
+              <div key={`post-${item.id}`} className="mb-2 break-inside-avoid md:mb-4">
+                <PostCard post={item} />
+              </div>
             ) : (
-              <ProjectCard key={`project-${item.id}`} project={item} />
+              <div key={`project-${item.id}`} className="mb-3 break-inside-avoid md:mb-6">
+                <ProjectCard project={item} />
+              </div>
             ),
           )}
         </div>
       ) : (
-        <div className="mx-auto max-w-5xl rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="mx-0.5 rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center shadow-sm md:mx-auto md:max-w-5xl dark:border-slate-800 dark:bg-slate-900">
           <h2 className="text-lg font-semibold">No live proof in the feed yet</h2>
           <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
             Once builders publish projects or updates through the API, they’ll show up here.
