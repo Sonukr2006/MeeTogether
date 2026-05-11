@@ -12,6 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { apiRequest } from "../../lib/api";
+import PageLoadingState from "../ui/PageLoadingState";
 import { fetchProjects } from "../../store/projectsSlice";
 import {
   addDiscussionMessage,
@@ -25,6 +26,8 @@ const Discussions = () => {
   const [messageText, setMessageText] = useState("");
   const [roomQuery, setRoomQuery] = useState("");
   const [showMobileInbox, setShowMobileInbox] = useState(false);
+  const [isThreadsLoading, setIsThreadsLoading] = useState(false);
+  const [isMessagesLoading, setIsMessagesLoading] = useState(false);
   const [backendThreads, setBackendThreads] = useState({});
   const [backendMessages, setBackendMessages] = useState({});
   const [activeBackendThreadByProject, setActiveBackendThreadByProject] = useState(
@@ -33,6 +36,7 @@ const Discussions = () => {
   const projectIdParam = searchParams.get("projectId");
   const currentUser = useSelector((state) => state.auth.currentUser);
   const projectItems = useSelector((state) => state.projects.items);
+  const projectsStatus = useSelector((state) => state.projects.status);
 
   const threadsByProject = useSelector((state) => state.projectDiscussions.threadsByProject);
   const activeThreadByProject = useSelector(
@@ -127,6 +131,7 @@ const Discussions = () => {
       }
 
       try {
+        setIsThreadsLoading(true);
         const data = await apiRequest(`/projects/${selectedProjectId}/threads`);
 
         if (!ignore && Array.isArray(data)) {
@@ -145,6 +150,10 @@ const Discussions = () => {
             ...prev,
             [selectedProjectId]: null,
           }));
+        }
+      } finally {
+        if (!ignore) {
+          setIsThreadsLoading(false);
         }
       }
     };
@@ -165,6 +174,7 @@ const Discussions = () => {
       }
 
       try {
+        setIsMessagesLoading(true);
         const data = await apiRequest(`/threads/${activeThread.id}/messages`);
 
         if (!ignore && Array.isArray(data)) {
@@ -187,6 +197,10 @@ const Discussions = () => {
         }
       } catch {
         // fallback to local discussion state
+      } finally {
+        if (!ignore) {
+          setIsMessagesLoading(false);
+        }
       }
     };
 
@@ -256,6 +270,16 @@ const Discussions = () => {
 
     setMessageText("");
   };
+
+  if (projectsStatus === "loading" && projectItems.length === 0) {
+    return (
+      <PageLoadingState
+        className="max-w-4xl"
+        title="Loading discussion rooms"
+        message="We’re pulling your project rooms and active threads."
+      />
+    );
+  }
 
   if (!selectedProject) {
     return (
@@ -387,6 +411,11 @@ const Discussions = () => {
                   </div>
 
                   <div className="mt-3 space-y-2">
+                    {isThreadsLoading && selectedThreads.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+                        Loading project threads...
+                      </div>
+                    ) : null}
                     {filteredProjects.map((project) => (
                       <button
                         key={project.id}
@@ -483,6 +512,11 @@ const Discussions = () => {
                     Channels
                   </div>
                   <div className="space-y-2">
+                    {isThreadsLoading && selectedThreads.length === 0 ? (
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-[#35373c] dark:text-slate-400">
+                        Loading project threads...
+                      </div>
+                    ) : null}
                     {selectedThreads.map((thread) => (
                       <button
                         key={thread.id}
@@ -538,7 +572,19 @@ const Discussions = () => {
                       <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
                     </div>
 
-                    {(selectedMessageList || activeThread?.messages || []).length > 0 ? (
+                    {isMessagesLoading &&
+                    !(selectedMessageList || activeThread?.messages || []).length ? (
+                      <div className="flex h-full items-center justify-center">
+                        <div className="rounded-lg border border-dashed border-slate-200 bg-white p-6 text-center dark:border-slate-800 dark:bg-slate-900">
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                            Loading conversation...
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            We’re fetching the latest room messages.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (selectedMessageList || activeThread?.messages || []).length > 0 ? (
                       <div className="space-y-3">
                         {(selectedMessageList || activeThread?.messages || []).map((discussion) => {
                           const authorInitial = discussion.author.charAt(0).toUpperCase();

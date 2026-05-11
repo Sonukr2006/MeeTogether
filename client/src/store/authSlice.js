@@ -31,8 +31,8 @@ export const signInUser = createAsyncThunk(
   }
 );
 
-export const fetchCurrentUser = createAsyncThunk(
-  "auth/fetchCurrentUser",
+export const restoreSession = createAsyncThunk(
+  "auth/restoreSession",
   async (_, { getState }) => {
     const token = getState().auth.accessToken;
 
@@ -40,12 +40,34 @@ export const fetchCurrentUser = createAsyncThunk(
       throw new Error("Missing access token");
     }
 
-    return apiRequest("/auth/me", {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
+    try {
+      const user = await apiRequest("/auth/me", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      return {
+        user,
+        accessToken: token,
+      };
+    } catch (error) {
+      const message = error?.message?.toLowerCase?.() ?? "";
+
+      if (!message.includes("unauthorized")) {
+        throw error;
+      }
+
+      const refreshed = await apiRequest("/auth/refresh", {
+        method: "POST",
+      });
+
+      return {
+        user: refreshed.user,
+        accessToken: refreshed.accessToken,
+      };
+    }
   }
 );
 
@@ -144,17 +166,19 @@ const authSlice = createSlice({
         state.status = "failed";
         state.error = action.error.message ?? "Sign in failed";
       })
-      .addCase(fetchCurrentUser.pending, (state) => {
+      .addCase(restoreSession.pending, (state) => {
         state.status = "loading";
       })
-      .addCase(fetchCurrentUser.fulfilled, (state, action) => {
+      .addCase(restoreSession.fulfilled, (state, action) => {
         state.status = "succeeded";
-        state.currentUser = action.payload;
+        state.currentUser = action.payload.user;
+        state.accessToken = action.payload.accessToken;
         state.initialized = true;
         state.needsSessionRefresh = false;
-        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(action.payload));
+        localStorage.setItem(AUTH_TOKEN_KEY, action.payload.accessToken);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(action.payload.user));
       })
-      .addCase(fetchCurrentUser.rejected, (state, action) => {
+      .addCase(restoreSession.rejected, (state, action) => {
         state.status = "failed";
         state.currentUser = null;
         state.accessToken = null;

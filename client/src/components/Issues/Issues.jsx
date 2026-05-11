@@ -10,6 +10,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { apiRequest } from "../../lib/api";
+import PageLoadingState from "../ui/PageLoadingState";
 
 const STATUS_ORDER = ["Open", "In progress", "Done"];
 
@@ -43,11 +44,14 @@ export default function Issues() {
   const [projectFilter, setProjectFilter] = useState("All");
   const [assignedIssueIds, setAssignedIssueIds] = useState({});
   const [issues, setIssues] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadIssues = async () => {
+      setIsLoading(true);
+
       try {
         const response = await apiRequest("/issues");
         if (isMounted && Array.isArray(response)) {
@@ -56,6 +60,10 @@ export default function Issues() {
       } catch {
         if (isMounted) {
           setIssues([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
         }
       }
     };
@@ -111,6 +119,16 @@ export default function Issues() {
       [issueId]: !current[issueId],
     }));
   };
+
+  if (isLoading && issues.length === 0) {
+    return (
+      <PageLoadingState
+        className="max-w-6xl"
+        title="Loading issues"
+        message="We’re bringing in the latest work board from the backend."
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 text-slate-900 dark:text-slate-100">

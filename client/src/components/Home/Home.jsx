@@ -1,11 +1,13 @@
 import { useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import ProjectCard from "../Project/ProjectCard";
+import PageLoadingState from "../ui/PageLoadingState";
 import { fetchProjects } from "../../store/projectsSlice";
 
 const Home = () => {
   const dispatch = useDispatch();
   const projectItems = useSelector((state) => state.projects.items);
+  const projectsStatus = useSelector((state) => state.projects.status);
   const visibleProjects = useMemo(() => projectItems, [projectItems]);
 
   useEffect(() => {
@@ -21,7 +23,13 @@ const Home = () => {
         <h1 className="mt-1 text-xl font-semibold">MeeTogether Build Network</h1>
       </div>
 
-      {visibleProjects.length > 0 ? (
+      {projectsStatus === "loading" && visibleProjects.length === 0 ? (
+        <PageLoadingState
+          className="max-w-5xl"
+          title="Loading build rooms"
+          message="We’re pulling the latest projects from the backend."
+        />
+      ) : visibleProjects.length > 0 ? (
         <div className="grid grid-cols-1 gap-x-4 gap-y-0 max-w-5xl mx-auto md:grid-cols-2">
           {visibleProjects.map((project) => (
             <ProjectCard key={project.id} project={project} />

@@ -13,6 +13,7 @@ import {
 import ContributorStack from "./ContributorStack";
 import { apiRequest } from "../../lib/api";
 import { mapApiProjectToDetail } from "../../lib/backendMappers";
+import PageLoadingState from "../ui/PageLoadingState";
 
 const statusClasses = {
   Done: "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300",
@@ -25,6 +26,7 @@ const statusClasses = {
 export default function ProjectRoom() {
   const { projectId } = useParams();
   const [project, setProject] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     let ignore = false;
@@ -33,6 +35,8 @@ export default function ProjectRoom() {
       if (!projectId) {
         return;
       }
+
+      setIsLoading(true);
 
       try {
         const data = await apiRequest(`/projects/${projectId}`);
@@ -44,6 +48,10 @@ export default function ProjectRoom() {
         if (!ignore) {
           setProject(null);
         }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -53,6 +61,16 @@ export default function ProjectRoom() {
       ignore = true;
     };
   }, [projectId]);
+
+  if (isLoading && !project) {
+    return (
+      <PageLoadingState
+        className="max-w-3xl"
+        title="Loading project room"
+        message="We’re gathering the latest project context and room details."
+      />
+    );
+  }
 
   if (!project) {
     return (

@@ -14,6 +14,7 @@ import {
   Star,
 } from "lucide-react";
 import { emptyProfile } from "../../lib/uiDefaults";
+import PageLoadingState from "../ui/PageLoadingState";
 import { fetchProfileByUsername } from "../../store/profilesSlice";
 import { fetchProjects } from "../../store/projectsSlice";
 
@@ -21,6 +22,7 @@ const Resume = () => {
   const { userId } = useParams();
   const dispatch = useDispatch();
   const projectCatalog = useSelector((state) => state.projects.items);
+  const projectsStatus = useSelector((state) => state.projects.status);
   const profileEntry = useSelector((state) =>
     userId ? state.profiles.byUsername[userId] : null,
   );
@@ -56,13 +58,16 @@ const Resume = () => {
     { label: "Mentor reviews", value: `${profileData.mentorReviews}`, icon: GraduationCap },
   ];
 
-  if (profileEntry?.status === "loading" && !profileEntry?.profile) {
+  if (
+    (profileEntry?.status === "loading" && !profileEntry?.profile) ||
+    (projectsStatus === "loading" && projectCatalog.length === 0)
+  ) {
     return (
-      <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
-        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-          Loading proof resume...
-        </p>
-      </div>
+      <PageLoadingState
+        className="max-w-5xl"
+        title="Loading proof resume"
+        message="We’re assembling profile and project data for this resume."
+      />
     );
   }
 

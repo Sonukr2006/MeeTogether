@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { apiRequest } from "../../lib/api";
+import PageLoadingState from "../ui/PageLoadingState";
 import {
   markAllRequestsRead,
   updateRequestStatus,
@@ -33,6 +34,7 @@ const requestIcons = {
 const Requests = () => {
   const [activeFilter, setActiveFilter] = useState("All");
   const [backendRequests, setBackendRequests] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   const dispatch = useDispatch();
   const currentUser = useSelector((state) => state.auth.currentUser);
   const profileHandle = currentUser?.username ?? "builder";
@@ -60,6 +62,8 @@ const Requests = () => {
         return;
       }
 
+      setIsLoading(true);
+
       try {
         const data = await apiRequest(
           `/requests?username=${encodeURIComponent(currentUser.username)}`
@@ -71,6 +75,10 @@ const Requests = () => {
       } catch {
         if (!ignore) {
           setBackendRequests(null);
+        }
+      } finally {
+        if (!ignore) {
+          setIsLoading(false);
         }
       }
     };
@@ -93,6 +101,16 @@ const Requests = () => {
   const handleStatusUpdate = (id, status) => {
     dispatch(updateRequestStatus({ id, status }));
   };
+
+  if (isLoading && backendRequests === null) {
+    return (
+      <PageLoadingState
+        className="max-w-6xl"
+        title="Loading requests"
+        message="We’re fetching your latest opportunity inbox."
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 text-slate-900 dark:text-slate-100">

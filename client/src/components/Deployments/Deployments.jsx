@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { Activity, ExternalLink, GitBranch, Rocket, ShieldCheck, TimerReset } from "lucide-react";
 import { apiRequest } from "../../lib/api";
+import PageLoadingState from "../ui/PageLoadingState";
 
 export default function Deployments() {
   const [deploymentCards, setDeploymentCards] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadDeployments = async () => {
+      setIsLoading(true);
+
       try {
         const response = await apiRequest("/deployments");
         if (isMounted && Array.isArray(response)) {
@@ -31,6 +35,10 @@ export default function Deployments() {
         if (isMounted) {
           setDeploymentCards([]);
         }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -43,6 +51,16 @@ export default function Deployments() {
 
   const liveCount = deploymentCards.filter((card) => card.status.label === "Live").length;
   const previewCount = deploymentCards.filter((card) => card.status.label === "Preview").length;
+
+  if (isLoading && deploymentCards.length === 0) {
+    return (
+      <PageLoadingState
+        className="max-w-6xl"
+        title="Loading deployments"
+        message="We’re checking the latest shipping state across active build rooms."
+      />
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl space-y-5 text-slate-900 dark:text-slate-100">
