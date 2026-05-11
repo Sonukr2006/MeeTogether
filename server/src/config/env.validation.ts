@@ -1,5 +1,13 @@
 import { plainToInstance } from 'class-transformer';
-import { IsIn, IsInt, IsNotEmpty, IsString, Min, validateSync } from 'class-validator';
+import {
+  IsIn,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Min,
+  validateSync,
+} from 'class-validator';
 
 class EnvVariables {
   @IsIn(['development', 'test', 'production'])
@@ -51,6 +59,47 @@ class EnvVariables {
   @IsString()
   @IsNotEmpty()
   CLIENT_ORIGIN!: string;
+
+  @IsOptional()
+  @IsIn(['supabase', 's3'])
+  STORAGE_PROVIDER?: string;
+
+  @IsOptional()
+  @IsString()
+  SUPABASE_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  SUPABASE_SERVICE_ROLE_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  SUPABASE_STORAGE_BUCKET?: string;
+
+  @IsOptional()
+  @IsString()
+  AWS_REGION?: string;
+
+  @IsOptional()
+  @IsString()
+  AWS_ACCESS_KEY_ID?: string;
+
+  @IsOptional()
+  @IsString()
+  AWS_SECRET_ACCESS_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  S3_BUCKET_NAME?: string;
+
+  @IsOptional()
+  @IsString()
+  CLOUDFRONT_BASE_URL?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(60)
+  S3_UPLOAD_URL_TTL_SECONDS?: number;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

@@ -12,6 +12,7 @@ import { IssuesModule } from './modules/issues/issues.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { RequestsModule } from './modules/requests/requests.module';
+import { StorageModule } from './modules/storage/storage.module';
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -33,6 +34,7 @@ import { UsersModule } from './modules/users/users.module';
     ProfilesModule,
     ProjectsModule,
     RequestsModule,
+    StorageModule,
   ],
 })
 export class AppModule {}

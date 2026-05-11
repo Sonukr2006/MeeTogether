@@ -15,6 +15,18 @@ export default () => ({
     from: process.env.EMAIL_FROM ?? 'noreply@meetogether.dev',
     resendApiKey: process.env.RESEND_API_KEY ?? '',
   },
+  storage: {
+    provider: process.env.STORAGE_PROVIDER ?? 'supabase',
+    supabaseUrl: process.env.SUPABASE_URL ?? '',
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+    supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET ?? '',
+    awsRegion: process.env.AWS_REGION ?? '',
+    awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID ?? '',
+    awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? '',
+    s3BucketName: process.env.S3_BUCKET_NAME ?? '',
+    cloudFrontBaseUrl: process.env.CLOUDFRONT_BASE_URL ?? '',
+    uploadUrlTtlSeconds: Number(process.env.S3_UPLOAD_URL_TTL_SECONDS ?? 300),
+  },
   clientOrigins: (process.env.CLIENT_ORIGIN ?? 'http://localhost:5173')
     .split(',')
     .map((origin) => origin.trim())

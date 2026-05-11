@@ -43,6 +43,33 @@ export class UsersService {
     return user;
   }
 
+  async updateAvatar(userId: string, avatarUrl: string) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        avatar: avatarUrl.trim(),
+      },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        avatar: true,
+        bio: true,
+        title: true,
+        location: true,
+        openTo: true,
+        emailVerified: true,
+        accountState: true,
+        createdAt: true,
+      },
+    });
+
+    this.publicUserCache.clear(userId);
+    this.publicUserCache.set(userId, user);
+    return user;
+  }
+
   private fetchPublicUserById(userId: string) {
     return this.prisma.user.findUnique({
       where: { id: userId },
