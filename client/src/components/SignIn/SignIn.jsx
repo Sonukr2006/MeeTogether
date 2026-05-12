@@ -10,7 +10,7 @@ const SignIn = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { showAlert } = useAlert();
-  const { status, currentUser } = useSelector((state) => state.auth);
+  const { status, currentUser, initialized } = useSelector((state) => state.auth);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -18,7 +18,7 @@ const SignIn = () => {
   });
 
   const [showPassword, setShowPassword] = useState(false);
-  const loading = status === "loading";
+  const loading = status === "loading" && initialized;
 
   useEffect(() => {
     if (currentUser?.username) {

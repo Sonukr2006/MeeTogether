@@ -26,12 +26,18 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isCreateMenuOpen, setIsCreateMenuOpen] = useState(false);
-  const currentUser = useSelector((state) => state.auth.currentUser);
+  const { currentUser, initialized } = useSelector((state) => state.auth);
   const unreadRequests = useSelector(
     (state) =>
       state.opportunityRequests.requests.filter((request) => request.unread).length
   );
-  const navItems = currentUser ? baseNavItems : guestNavItems;
+  const navItems = !initialized ? [] : currentUser ? baseNavItems : guestNavItems;
+  const profileTarget = !initialized
+    ? "#"
+    : currentUser?.username
+      ? `/profile/${currentUser.username}`
+      : "/sign-in";
+  const requestsTarget = !initialized ? "#" : currentUser ? "/requests" : "/sign-in";
 
   const openLogoutConfirm = () => {
     setIsLogoutConfirmOpen(true);
@@ -145,9 +151,20 @@ const Navbar = () => {
             </div>
           ) : null}
           <Link
-            to={currentUser?.username ? `/profile/${currentUser.username}` : "/sign-in"}
+            to={profileTarget}
             className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-900 dark:text-slate-300 sm:h-10 sm:w-10 md:border md:border-slate-300 md:dark:border-white/10 md:rounded-xl"
-            aria-label={currentUser ? "Open Proof Profile" : "Open Sign In"}
+            aria-label={
+              !initialized
+                ? "Checking your session"
+                : currentUser
+                  ? "Open Proof Profile"
+                  : "Open Sign In"
+            }
+            onClick={(event) => {
+              if (!initialized) {
+                event.preventDefault();
+              }
+            }}
           >
             {currentUser ? (
               <img
@@ -160,12 +177,23 @@ const Navbar = () => {
             )}
           </Link>
           <Link
-            to={currentUser ? "/requests" : "/sign-in"}
+            to={requestsTarget}
             className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-900 dark:text-slate-300 sm:h-10 sm:w-10 md:border md:border-slate-300 md:dark:border-white/10 md:rounded-xl"
-            aria-label={currentUser ? "Open Requests Center" : "Open Sign In"}
+            aria-label={
+              !initialized
+                ? "Checking your session"
+                : currentUser
+                  ? "Open Requests Center"
+                  : "Open Sign In"
+            }
+            onClick={(event) => {
+              if (!initialized) {
+                event.preventDefault();
+              }
+            }}
           >
             <Bell size={16} />
-            {unreadRequests > 0 && (
+            {initialized && unreadRequests > 0 && (
               <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-emerald-500 px-1 text-[10px] font-bold leading-none text-white dark:border-slate-900">
                 {unreadRequests}
               </span>
@@ -237,7 +265,7 @@ const Navbar = () => {
         </div>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
-          {currentUser ? (
+          {initialized && currentUser ? (
             <>
               <Link
                 to="/create/project"
@@ -258,9 +286,10 @@ const Navbar = () => {
             </>
           ) : null}
           <Link
-            to={currentUser?.username ? `/profile/${currentUser.username}` : "/sign-in"}
+            to={profileTarget}
             onClick={() => setIsMobileMenuOpen(false)}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
+            aria-disabled={!initialized}
           >
             {currentUser ? (
               <img
@@ -271,19 +300,24 @@ const Navbar = () => {
             ) : (
               <User size={16} />
             )}
-            {currentUser ? "Profile" : "Sign In"}
+            {!initialized ? "Checking session" : currentUser ? "Profile" : "Sign In"}
           </Link>
           <Link
-            to={currentUser ? "/requests" : "/sign-in"}
+            to={requestsTarget}
             onClick={() => setIsMobileMenuOpen(false)}
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
+            aria-disabled={!initialized}
           >
             <Bell size={16} />
-            {currentUser ? `Inbox ${unreadRequests > 0 ? `(${unreadRequests})` : ""}` : "Sign In"}
+            {!initialized
+              ? "Checking session"
+              : currentUser
+                ? `Inbox ${unreadRequests > 0 ? `(${unreadRequests})` : ""}`
+                : "Sign In"}
           </Link>
         </div>
 
-        {currentUser && (
+        {initialized && currentUser && (
           <button
             type="button"
             onClick={openLogoutConfirm}

@@ -1,12 +1,14 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Request, Response } from 'express';
+import type { CookieOptions } from 'express';
 import * as bcrypt from 'bcrypt';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -19,12 +21,16 @@ import { SignupDto } from './dto/signup.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 
 const REFRESH_COOKIE_NAME = 'mt_refresh_token';
+const CSRF_COOKIE_NAME = 'mt_csrf_token';
+const CSRF_HEADER_NAME = 'x-csrf-token';
 type RequestWithCookies = Request & {
   cookies?: Record<string, string | undefined>;
 };
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
@@ -105,9 +111,23 @@ export class AuthService {
       },
     });
 
-    if (!session || session.expiresAt < new Date()) {
+    if (!session) {
+      await this.handleRefreshTokenReuse(refreshTokenHash, req, res);
       throw new UnauthorizedException('Refresh token invalid or expired');
     }
+
+    if (session.expiresAt < new Date()) {
+      await this.prisma.session.update({
+        where: { id: session.id },
+        data: {
+          revokedAt: session.revokedAt ?? new Date(),
+        },
+      });
+      this.clearRefreshCookie(res);
+      throw new UnauthorizedException('Refresh token invalid or expired');
+    }
+
+    this.validateCsrfForSession(req, session.csrfTokenHash);
 
     await this.prisma.session.update({
       where: { id: session.id },
@@ -124,9 +144,22 @@ export class AuthService {
     const refreshToken = this.getRefreshTokenFromRequest(req);
 
     if (refreshToken) {
+      const refreshTokenHash = this.hashToken(refreshToken);
+      const session = await this.prisma.session.findFirst({
+        where: {
+          refreshTokenHash,
+          revokedAt: null,
+        },
+        select: {
+          csrfTokenHash: true,
+        },
+      });
+
+      this.validateCsrfForSession(req, session?.csrfTokenHash);
+
       await this.prisma.session.updateMany({
         where: {
-          refreshTokenHash: this.hashToken(refreshToken),
+          refreshTokenHash,
           revokedAt: null,
         },
         data: {
@@ -141,6 +174,23 @@ export class AuthService {
 
   async logoutAll(userId: string, req: Request, res: Response) {
     this.ensureTrustedOrigin(req);
+    const refreshToken = this.getRefreshTokenFromRequest(req as RequestWithCookies);
+
+    if (refreshToken) {
+      const session = await this.prisma.session.findFirst({
+        where: {
+          refreshTokenHash: this.hashToken(refreshToken),
+          revokedAt: null,
+          userId,
+        },
+        select: {
+          csrfTokenHash: true,
+        },
+      });
+
+      this.validateCsrfForSession(req as RequestWithCookies, session?.csrfTokenHash);
+    }
+
     await this.prisma.session.updateMany({
       where: {
         userId,
@@ -297,6 +347,8 @@ export class AuthService {
 
     const refreshToken = randomBytes(48).toString('hex');
     const refreshTokenHash = this.hashToken(refreshToken);
+    const csrfToken = randomBytes(32).toString('hex');
+    const csrfTokenHash = this.hashToken(csrfToken);
     const refreshTokenTtlDays = this.configService.get<number>('refreshTokenTtlDays') ?? 30;
     const expiresAt = new Date(Date.now() + refreshTokenTtlDays * 24 * 60 * 60 * 1000);
 
@@ -304,6 +356,7 @@ export class AuthService {
       data: {
         userId,
         refreshTokenHash,
+        csrfTokenHash,
         tokenFamilyId: existingTokenFamilyId ?? randomBytes(16).toString('hex'),
         userAgent: req.get('user-agent'),
         ipAddress: req.ip,
@@ -312,13 +365,8 @@ export class AuthService {
       },
     });
 
-    res.cookie(REFRESH_COOKIE_NAME, refreshToken, {
-      httpOnly: true,
-      secure: this.configService.get<string>('nodeEnv') === 'production',
-      sameSite: 'lax',
-      path: '/api/v1/auth',
-      expires: expiresAt,
-    });
+    res.cookie(REFRESH_COOKIE_NAME, refreshToken, this.getRefreshCookieOptions(expiresAt));
+    res.cookie(CSRF_COOKIE_NAME, csrfToken, this.getCsrfCookieOptions(expiresAt));
 
     return {
       accessToken,
@@ -327,11 +375,8 @@ export class AuthService {
   }
 
   private clearRefreshCookie(res: Response) {
-    res.clearCookie(REFRESH_COOKIE_NAME, {
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/api/v1/auth',
-    });
+    res.clearCookie(REFRESH_COOKIE_NAME, this.getRefreshCookieOptions());
+    res.clearCookie(CSRF_COOKIE_NAME, this.getCsrfCookieOptions());
   }
 
   private hashToken(token: string) {
@@ -342,6 +387,97 @@ export class AuthService {
     const cookies = req.cookies as Record<string, unknown> | undefined;
     const cookieValue = cookies?.[REFRESH_COOKIE_NAME];
     return typeof cookieValue === 'string' ? cookieValue : undefined;
+  }
+
+  private getCsrfTokenFromRequest(req: RequestWithCookies): string | undefined {
+    const cookies = req.cookies as Record<string, unknown> | undefined;
+    const cookieValue = cookies?.[CSRF_COOKIE_NAME];
+    return typeof cookieValue === 'string' ? cookieValue : undefined;
+  }
+
+  private async handleRefreshTokenReuse(
+    refreshTokenHash: string,
+    req: Request,
+    res: Response,
+  ) {
+    const reusedSession = await this.prisma.session.findFirst({
+      where: {
+        refreshTokenHash,
+      },
+    });
+
+    if (!reusedSession) {
+      this.clearRefreshCookie(res);
+      return;
+    }
+
+    this.logger.warn(
+      `Detected refresh token reuse for session family ${reusedSession.tokenFamilyId} from ${req.ip ?? 'unknown-ip'}`,
+    );
+
+    await this.prisma.session.updateMany({
+      where: {
+        tokenFamilyId: reusedSession.tokenFamilyId,
+        revokedAt: null,
+      },
+      data: {
+        revokedAt: new Date(),
+      },
+    });
+
+    this.clearRefreshCookie(res);
+  }
+
+  private getRefreshCookieOptions(expiresAt?: Date): CookieOptions {
+    const isProduction = this.configService.get<string>('nodeEnv') === 'production';
+    const sameSiteSetting =
+      (this.configService.get<'lax' | 'strict' | 'none'>('auth.cookieSameSite') ?? 'lax');
+    const cookieDomain = this.configService.get<string | undefined>('auth.cookieDomain');
+
+    return {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? sameSiteSetting : 'lax',
+      path: '/api/v1/auth',
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
+      ...(expiresAt ? { expires: expiresAt } : {}),
+    };
+  }
+
+  private getCsrfCookieOptions(expiresAt?: Date): CookieOptions {
+    const isProduction = this.configService.get<string>('nodeEnv') === 'production';
+    const sameSiteSetting =
+      (this.configService.get<'lax' | 'strict' | 'none'>('auth.cookieSameSite') ?? 'lax');
+    const cookieDomain = this.configService.get<string | undefined>('auth.cookieDomain');
+
+    return {
+      httpOnly: false,
+      secure: isProduction,
+      sameSite: isProduction ? sameSiteSetting : 'lax',
+      path: '/',
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
+      ...(expiresAt ? { expires: expiresAt } : {}),
+    };
+  }
+
+  private validateCsrfForSession(
+    req: RequestWithCookies,
+    sessionCsrfTokenHash?: string | null,
+  ) {
+    if (!sessionCsrfTokenHash) {
+      return;
+    }
+
+    const headerToken = req.get(CSRF_HEADER_NAME);
+    const cookieToken = this.getCsrfTokenFromRequest(req);
+
+    if (!headerToken || !cookieToken || headerToken !== cookieToken) {
+      throw new UnauthorizedException('CSRF token missing or invalid');
+    }
+
+    if (this.hashToken(headerToken) !== sessionCsrfTokenHash) {
+      throw new UnauthorizedException('CSRF token missing or invalid');
+    }
   }
 
   private ensureTrustedOrigin(req: Request) {

@@ -2,9 +2,14 @@ export default () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
   port: Number(process.env.PORT ?? 4000),
   databaseUrl: process.env.DATABASE_URL ?? '',
+  directUrl: process.env.DIRECT_URL ?? '',
   jwt: {
     accessSecret: process.env.JWT_ACCESS_SECRET ?? '',
     accessTtl: process.env.JWT_ACCESS_TTL ?? '15m',
+  },
+  auth: {
+    cookieDomain: process.env.AUTH_COOKIE_DOMAIN || undefined,
+    cookieSameSite: process.env.AUTH_COOKIE_SAME_SITE ?? 'lax',
   },
   refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 30),
   emailVerificationTtlHours: Number(process.env.EMAIL_VERIFICATION_TTL_HOURS ?? 24),

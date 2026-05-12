@@ -81,6 +81,7 @@ model Session {
   id               String    @id @default(cuid())
   userId           String
   refreshTokenHash String
+  csrfTokenHash    String?
   tokenFamilyId    String
   userAgent        String?
   ipAddress        String?

@@ -6,10 +6,6 @@ const AUTH_USER_KEY = "meetogether_current_user";
 
 const initialToken =
   typeof window !== "undefined" ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
-const initialUser =
-  typeof window !== "undefined"
-    ? JSON.parse(localStorage.getItem(AUTH_USER_KEY) ?? "null")
-    : null;
 
 export const signUpUser = createAsyncThunk(
   "auth/signUpUser",
@@ -109,7 +105,7 @@ const authSlice = createSlice({
   name: "auth",
   initialState: {
     accessToken: initialToken,
-    currentUser: initialUser,
+    currentUser: null,
     status: "idle",
     initialized: false,
     needsSessionRefresh: true,

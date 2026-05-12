@@ -21,6 +21,10 @@ class EnvVariables {
   @IsNotEmpty()
   DATABASE_URL!: string;
 
+  @IsOptional()
+  @IsString()
+  DIRECT_URL?: string;
+
   @IsString()
   @IsNotEmpty()
   JWT_ACCESS_SECRET!: string;
@@ -59,6 +63,14 @@ class EnvVariables {
   @IsString()
   @IsNotEmpty()
   CLIENT_ORIGIN!: string;
+
+  @IsOptional()
+  @IsString()
+  AUTH_COOKIE_DOMAIN?: string;
+
+  @IsOptional()
+  @IsIn(['lax', 'strict', 'none'])
+  AUTH_COOKIE_SAME_SITE?: string;
 
   @IsOptional()
   @IsIn(['supabase', 's3'])

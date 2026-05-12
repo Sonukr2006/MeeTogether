@@ -31,7 +31,7 @@ import TagList from "../ui/TagList";
 import UserMiniProfile from "../ui/UserMiniProfile";
 import CommentModal from "../Post/CommentModal";
 
-export default function ProjectCard({ project }) {
+export default function ProjectCard({ project, prioritizeImage = false }) {
   const dispatch = useDispatch();
   const { activeAnalyzeProjectId, likedProjects, savedProjects } = useSelector(
     (state) => state.projectInteractions
@@ -124,6 +124,12 @@ export default function ProjectCard({ project }) {
         <img
           src={project.image}
           alt={project.title}
+          loading={prioritizeImage ? "eager" : "lazy"}
+          fetchPriority={prioritizeImage ? "high" : "auto"}
+          decoding="async"
+          width="1200"
+          height="630"
+          sizes="(max-width: 767px) 100vw, 50vw"
           className="mb-4 h-56 w-full rounded-lg object-cover"
         />
       )}

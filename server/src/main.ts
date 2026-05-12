@@ -42,6 +42,30 @@ async function bootstrap() {
     }),
   );
   app.use(
+    '/api/v1/auth/refresh',
+    createRateLimitMiddleware({
+      windowMs: 15 * 60 * 1000,
+      maxRequests: 60,
+      message: 'Too many session refresh attempts. Please sign in again shortly.',
+    }),
+  );
+  app.use(
+    '/api/v1/auth/logout',
+    createRateLimitMiddleware({
+      windowMs: 15 * 60 * 1000,
+      maxRequests: 30,
+      message: 'Too many sign out attempts. Please try again later.',
+    }),
+  );
+  app.use(
+    '/api/v1/auth/logout-all',
+    createRateLimitMiddleware({
+      windowMs: 15 * 60 * 1000,
+      maxRequests: 20,
+      message: 'Too many session revocation attempts. Please try again later.',
+    }),
+  );
+  app.use(
     '/api/v1/auth/forgot-password',
     createRateLimitMiddleware({
       windowMs: 15 * 60 * 1000,

@@ -45,14 +45,14 @@ const Home = () => {
         />
       ) : feedItems.length > 0 ? (
         <div className="columns-1 gap-2 px-0.5 md:mx-auto md:max-w-5xl md:columns-2 md:gap-4 md:px-0">
-          {feedItems.map((item) =>
+          {feedItems.map((item, index) =>
             item.kind === "post" ? (
               <div key={`post-${item.id}`} className="mb-2 break-inside-avoid md:mb-4">
-                <PostCard post={item} />
+                <PostCard post={item} prioritizeImage={index === 0} />
               </div>
             ) : (
               <div key={`project-${item.id}`} className="mb-3 break-inside-avoid md:mb-6">
-                <ProjectCard project={item} />
+                <ProjectCard project={item} prioritizeImage={index === 0} />
               </div>
             ),
           )}

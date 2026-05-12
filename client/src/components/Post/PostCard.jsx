@@ -27,7 +27,7 @@ import SignalGrid from "../ui/SignalGrid";
 import TagList from "../ui/TagList";
 import UserMiniProfile from "../ui/UserMiniProfile";
 
-export default function PostCard({ post }) {
+export default function PostCard({ post, prioritizeImage = false }) {
   const dispatch = useDispatch();
   const { activeCommentsPostId, likedPosts, savedPosts } = useSelector(
     (state) => state.postInteractions
@@ -166,6 +166,12 @@ export default function PostCard({ post }) {
             <img
               src={post.image}
               alt={post.title}
+              loading={prioritizeImage ? "eager" : "lazy"}
+              fetchPriority={prioritizeImage ? "high" : "auto"}
+              decoding="async"
+              width="1200"
+              height="630"
+              sizes="(max-width: 767px) 100vw, 50vw"
               className="mb-4 h-56 w-full rounded-lg object-cover"
             />
           )}
