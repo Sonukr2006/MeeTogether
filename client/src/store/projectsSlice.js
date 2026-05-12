@@ -82,6 +82,17 @@ const projectsSlice = createSlice({
       item.likes = Math.max(0, (item.likes ?? 0) + delta);
       state.lastFetchedAt = Date.now();
     },
+    updateProjectCommentsCount: (state, action) => {
+      const { projectId, commentsCount } = action.payload;
+      const item = state.items.find((entry) => entry.id === projectId);
+
+      if (!item) {
+        return;
+      }
+
+      item.comments = commentsCount;
+      state.lastFetchedAt = Date.now();
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -107,6 +118,7 @@ export const {
   upsertProjectCard,
   updateProjectLikeState,
   adjustProjectLikeState,
+  updateProjectCommentsCount,
 } =
   projectsSlice.actions;
 export default projectsSlice.reducer;

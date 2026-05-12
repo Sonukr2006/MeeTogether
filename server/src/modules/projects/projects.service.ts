@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { TtlCache } from 'src/common/utils/ttl-cache';
 import { LikesService } from '../likes/likes.service';
@@ -47,39 +47,40 @@ const projectInclude = {
   },
 } as const;
 
+const projectCommentInclude = {
+  author: {
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      avatar: true,
+      title: true,
+    },
+  },
+} as const;
+
 type ProjectWithRelations = Prisma.ProjectGetPayload<{
   include: typeof projectInclude;
 }>;
 
+type ProjectCommentWithAuthor = Prisma.ProjectCommentGetPayload<{
+  include: typeof projectCommentInclude;
+}>;
+
 @Injectable()
-export class ProjectsService implements OnModuleInit, OnModuleDestroy {
+export class ProjectsService {
   private readonly projectsListCache = new TtlCache<ReturnType<ProjectsService['toProjectSummary']>[]>(30_000);
   private readonly projectDetailCache = new TtlCache<ReturnType<ProjectsService['toProjectDetail']>>(30_000);
+  private readonly projectCommentsCache = new TtlCache<
+    ReturnType<ProjectsService['toProjectComment']>[]
+  >(30_000);
   private readonly logger = new Logger(ProjectsService.name);
-  private queueTimer: NodeJS.Timeout | null = null;
   private isProcessingQueue = false;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly likesService: LikesService,
   ) {}
-
-  onModuleInit() {
-    if (!this.likesService.isQueueEnabled()) {
-      return;
-    }
-
-    this.queueTimer = setInterval(() => {
-      void this.processQueuedLikes();
-    }, this.likesService.getPollIntervalMs());
-  }
-
-  onModuleDestroy() {
-    if (this.queueTimer) {
-      clearInterval(this.queueTimer);
-      this.queueTimer = null;
-    }
-  }
 
   async getProjects() {
     const cached = this.projectsListCache.get('all');
@@ -229,6 +230,80 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
     return detail;
   }
 
+  async getComments(projectId: string) {
+    const cached = this.projectCommentsCache.get(projectId);
+    if (cached) {
+      return cached;
+    }
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const comments = await this.prisma.projectComment.findMany({
+      where: { projectId },
+      include: projectCommentInclude,
+      orderBy: [{ createdAt: 'asc' }],
+    });
+
+    const mapped = comments.map((comment) => this.toProjectComment(comment));
+    this.projectCommentsCache.set(projectId, mapped);
+    return mapped;
+  }
+
+  async createComment(projectId: string, userId: string, message: string) {
+    const created = await this.prisma.$transaction(async (tx) => {
+      const project = await tx.project.findUnique({
+        where: { id: projectId },
+        select: { id: true },
+      });
+
+      if (!project) {
+        throw new NotFoundException('Project not found');
+      }
+
+      const comment = await tx.projectComment.create({
+        data: {
+          projectId,
+          authorUserId: userId,
+          message: message.trim(),
+        },
+        include: projectCommentInclude,
+      });
+
+      const updated = await tx.project.update({
+        where: { id: projectId },
+        data: {
+          commentsCount: {
+            increment: 1,
+          },
+        },
+        select: {
+          commentsCount: true,
+        },
+      });
+
+      return {
+        comment,
+        commentsCount: updated.commentsCount,
+      };
+    });
+
+    this.projectCommentsCache.clear(projectId);
+    this.projectsListCache.clear();
+    this.projectDetailCache.clear(projectId);
+
+    return {
+      comment: this.toProjectComment(created.comment),
+      commentsCount: created.commentsCount,
+    };
+  }
+
   async setLikeState(projectId: string, userId: string, liked: boolean) {
     if (!this.likesService.isQueueEnabled()) {
       return this.applyLikeState(projectId, userId, liked);
@@ -240,6 +315,8 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       userId,
       liked,
     });
+
+    void this.processQueuedLikes();
 
     return {
       projectId,
@@ -397,6 +474,7 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       githubUrl: project.githubUrl,
       demoUrl: project.demoUrl,
       likes: project.likesCount,
+      comments: project.commentsCount,
       owner: project.owner,
       contributorsCount: project._count?.members ?? project.members.length,
       techStack: project.techTags.map((tag: ProjectWithRelations['techTags'][number]) => tag.value),
@@ -419,6 +497,8 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       mentorStatus: project.mentorStatus,
       githubUrl: project.githubUrl,
       demoUrl: project.demoUrl,
+      likes: project.likesCount,
+      comments: project.commentsCount,
       owner: project.owner,
       members: project.members.map((member: ProjectWithRelations['members'][number]) => ({
         id: member.user.id,
@@ -433,6 +513,22 @@ export class ProjectsService implements OnModuleInit, OnModuleDestroy {
       tags: project.tags.map((tag: ProjectWithRelations['tags'][number]) => tag.value),
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
+    };
+  }
+
+  private toProjectComment(comment: ProjectCommentWithAuthor) {
+    return {
+      id: comment.id,
+      projectId: comment.projectId,
+      message: comment.message,
+      createdAt: comment.createdAt,
+      author: {
+        id: comment.author.id,
+        name: comment.author.name,
+        username: comment.author.username,
+        avatar: comment.author.avatar,
+        title: comment.author.title ?? 'Builder',
+      },
     };
   }
 

@@ -3,6 +3,7 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { SetLikeStateDto } from '../likes/dto/set-like-state.dto';
+import { CreateProjectCommentDto } from './dto/create-project-comment.dto';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { ProjectsService } from './projects.service';
 
@@ -18,6 +19,11 @@ export class ProjectsController {
   @Get(':projectId')
   async getProjectById(@Param('projectId') projectId: string) {
     return this.projectsService.getProjectById(projectId);
+  }
+
+  @Get(':projectId/comments')
+  async getComments(@Param('projectId') projectId: string) {
+    return this.projectsService.getComments(projectId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -37,5 +43,15 @@ export class ProjectsController {
     @Body() setLikeStateDto: SetLikeStateDto,
   ) {
     return this.projectsService.setLikeState(projectId, user.sub, setLikeStateDto.liked);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':projectId/comments')
+  async createComment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('projectId') projectId: string,
+    @Body() createProjectCommentDto: CreateProjectCommentDto,
+  ) {
+    return this.projectsService.createComment(projectId, user.sub, createProjectCommentDto.message);
   }
 }

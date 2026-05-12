@@ -3,6 +3,7 @@ import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { SetLikeStateDto } from '../likes/dto/set-like-state.dto';
+import { CreatePostCommentDto } from './dto/create-post-comment.dto';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostsService } from './posts.service';
 
@@ -13,6 +14,11 @@ export class PostsController {
   @Get()
   async getFeedPosts() {
     return this.postsService.getFeedPosts();
+  }
+
+  @Get(':postId/comments')
+  async getComments(@Param('postId') postId: string) {
+    return this.postsService.getComments(postId);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -32,5 +38,15 @@ export class PostsController {
     @Body() setLikeStateDto: SetLikeStateDto,
   ) {
     return this.postsService.setLikeState(postId, user.sub, setLikeStateDto.liked);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post(':postId/comments')
+  async createComment(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('postId') postId: string,
+    @Body() createPostCommentDto: CreatePostCommentDto,
+  ) {
+    return this.postsService.createComment(postId, user.sub, createPostCommentDto.message);
   }
 }

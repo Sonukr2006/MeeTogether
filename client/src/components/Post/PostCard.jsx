@@ -222,7 +222,7 @@ export default function PostCard({ post }) {
               onSaveClick={() => dispatch(toggleSave(post.id))}
             />
 
-            {showComments && <CommentModal />}
+            {showComments && <CommentModal postId={post.id} />}
           </div>
         </div>
       </div>

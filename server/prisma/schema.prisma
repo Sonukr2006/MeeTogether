@@ -72,6 +72,8 @@ model User {
   assignedIssues              Issue[]           @relation("AssignedIssues")
   posts                       Post[]
   postLikes                   PostLike[]
+  postComments                PostComment[]
+  projectComments             ProjectComment[]
   projectLikes                ProjectLike[]
 }
 
@@ -164,6 +166,7 @@ model Project {
   githubUrl     String?
   demoUrl       String?
   likesCount    Int             @default(0)
+  commentsCount Int             @default(0)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   owner         User            @relation("OwnedProjects", fields: [ownerUserId], references: [id], onDelete: Cascade)
@@ -177,6 +180,7 @@ model Project {
   deployments   Deployment[]
   posts         Post[]
   likes         ProjectLike[]
+  comments      ProjectComment[]
 
   @@index([ownerUserId])
 }
@@ -358,10 +362,25 @@ model Post {
   links         PostLink[]
   tags          PostTag[]
   likes         PostLike[]
+  comments      PostComment[]
 
   @@index([authorUserId, createdAt])
   @@index([projectId, createdAt])
   @@index([type, createdAt])
+}
+
+model PostComment {
+  id          String   @id @default(cuid())
+  postId       String
+  authorUserId String
+  message      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  post         Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author       User     @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([postId, createdAt])
+  @@index([authorUserId, createdAt])
 }
 
 model PostTag {
@@ -407,4 +426,18 @@ model ProjectLike {
 
   @@unique([projectId, userId])
   @@index([userId])
+}
+
+model ProjectComment {
+  id           String   @id @default(cuid())
+  projectId    String
+  authorUserId String
+  message      String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author       User     @relation(fields: [authorUserId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([authorUserId, createdAt])
 }

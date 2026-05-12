@@ -74,6 +74,17 @@ const postsSlice = createSlice({
       item.likes = Math.max(0, (item.likes ?? 0) + delta);
       state.lastFetchedAt = Date.now();
     },
+    updatePostCommentsCount: (state, action) => {
+      const { postId, commentsCount } = action.payload;
+      const item = state.items.find((entry) => entry.id === postId);
+
+      if (!item) {
+        return;
+      }
+
+      item.comments = commentsCount;
+      state.lastFetchedAt = Date.now();
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -99,6 +110,7 @@ export const {
   prependPostCard,
   updatePostLikeState,
   adjustPostLikeState,
+  updatePostCommentsCount,
 } =
   postsSlice.actions;
 export default postsSlice.reducer;

@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, PostType } from '@prisma/client';
 import { TtlCache } from 'src/common/utils/ttl-cache';
 import { LikesService } from '../likes/likes.service';
@@ -33,38 +33,39 @@ const postInclude = {
   },
 } as const;
 
+const postCommentInclude = {
+  author: {
+    select: {
+      id: true,
+      name: true,
+      username: true,
+      avatar: true,
+      title: true,
+    },
+  },
+} as const;
+
 type PostWithRelations = Prisma.PostGetPayload<{
   include: typeof postInclude;
 }>;
 
+type PostCommentWithAuthor = Prisma.PostCommentGetPayload<{
+  include: typeof postCommentInclude;
+}>;
+
 @Injectable()
-export class PostsService implements OnModuleInit, OnModuleDestroy {
+export class PostsService {
   private readonly postsFeedCache = new TtlCache<ReturnType<PostsService['toFeedPost']>[]>(30_000);
+  private readonly postCommentsCache = new TtlCache<
+    ReturnType<PostsService['toPostComment']>[]
+  >(30_000);
   private readonly logger = new Logger(PostsService.name);
-  private queueTimer: NodeJS.Timeout | null = null;
   private isProcessingQueue = false;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly likesService: LikesService,
   ) {}
-
-  onModuleInit() {
-    if (!this.likesService.isQueueEnabled()) {
-      return;
-    }
-
-    this.queueTimer = setInterval(() => {
-      void this.processQueuedLikes();
-    }, this.likesService.getPollIntervalMs());
-  }
-
-  onModuleDestroy() {
-    if (this.queueTimer) {
-      clearInterval(this.queueTimer);
-      this.queueTimer = null;
-    }
-  }
 
   async getFeedPosts() {
     const cached = this.postsFeedCache.get('feed');
@@ -142,6 +143,79 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
     return this.toFeedPost(created);
   }
 
+  async getComments(postId: string) {
+    const cached = this.postCommentsCache.get(postId);
+    if (cached) {
+      return cached;
+    }
+
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { id: true },
+    });
+
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    const comments = await this.prisma.postComment.findMany({
+      where: { postId },
+      include: postCommentInclude,
+      orderBy: [{ createdAt: 'asc' }],
+    });
+
+    const mapped = comments.map((comment) => this.toPostComment(comment));
+    this.postCommentsCache.set(postId, mapped);
+    return mapped;
+  }
+
+  async createComment(postId: string, userId: string, message: string) {
+    const created = await this.prisma.$transaction(async (tx) => {
+      const post = await tx.post.findUnique({
+        where: { id: postId },
+        select: { id: true },
+      });
+
+      if (!post) {
+        throw new NotFoundException('Post not found');
+      }
+
+      const comment = await tx.postComment.create({
+        data: {
+          postId,
+          authorUserId: userId,
+          message: message.trim(),
+        },
+        include: postCommentInclude,
+      });
+
+      const updated = await tx.post.update({
+        where: { id: postId },
+        data: {
+          commentsCount: {
+            increment: 1,
+          },
+        },
+        select: {
+          commentsCount: true,
+        },
+      });
+
+      return {
+        comment,
+        commentsCount: updated.commentsCount,
+      };
+    });
+
+    this.postCommentsCache.clear(postId);
+    this.postsFeedCache.clear();
+
+    return {
+      comment: this.toPostComment(created.comment),
+      commentsCount: created.commentsCount,
+    };
+  }
+
   async setLikeState(postId: string, userId: string, liked: boolean) {
     if (!this.likesService.isQueueEnabled()) {
       return this.applyLikeState(postId, userId, liked);
@@ -153,6 +227,8 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
       userId,
       liked,
     });
+
+    void this.processQueuedLikes();
 
     return {
       postId,
@@ -321,6 +397,22 @@ export class PostsService implements OnModuleInit, OnModuleDestroy {
         avatar: post.author.avatar,
       },
       createdAt: post.createdAt,
+    };
+  }
+
+  private toPostComment(comment: PostCommentWithAuthor) {
+    return {
+      id: comment.id,
+      postId: comment.postId,
+      message: comment.message,
+      createdAt: comment.createdAt,
+      author: {
+        id: comment.author.id,
+        name: comment.author.name,
+        username: comment.author.username,
+        avatar: comment.author.avatar,
+        title: comment.author.title ?? 'Builder',
+      },
     };
   }
 

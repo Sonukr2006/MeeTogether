@@ -29,6 +29,7 @@ import LikeActionButton from "../ui/LikeActionButton";
 import SignalGrid from "../ui/SignalGrid";
 import TagList from "../ui/TagList";
 import UserMiniProfile from "../ui/UserMiniProfile";
+import CommentModal from "../Post/CommentModal";
 
 export default function ProjectCard({ project }) {
   const dispatch = useDispatch();
@@ -37,6 +38,7 @@ export default function ProjectCard({ project }) {
   );
   const [showAllTags, setShowAllTags] = useState(false);
   const [activeDetailModal, setActiveDetailModal] = useState(null);
+  const [showComments, setShowComments] = useState(false);
   const visibleTags = showAllTags ? project.tags : project.tags.slice(0, 3);
   const extraTagCount = Math.max(project.tags.length - 3, 0);
   const liked = Boolean(likedProjects[project.id]);
@@ -139,10 +141,9 @@ export default function ProjectCard({ project }) {
             </button>
           )}
         </div>
-
-
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-5 border-t border-slate-200 pt-3 text-sm dark:border-slate-800">
+        <div className="border-t border-slate-200 pt-3 dark:border-slate-800">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-5 text-sm">
             <LikeActionButton
               liked={liked}
               count={likeCount}
@@ -176,18 +177,7 @@ export default function ProjectCard({ project }) {
               count={discussionCount}
               label="Comments"
               ariaLabel={`Open project comments${discussionCount ? `, ${discussionCount} discussions` : ""}`}
-              component={Link}
-              componentProps={{
-                to: `/discussions?projectId=${project.id}`,
-                onClick: () =>
-                  dispatch(
-                    ensureDiscussionThread({
-                      authorName: "Sonu Kumar",
-                      projectId: project.id,
-                      projectTitle: project.title,
-                    })
-                  ),
-              }}
+              onClick={() => setShowComments((value) => !value)}
             />
 
             <button
@@ -211,33 +201,48 @@ export default function ProjectCard({ project }) {
             >
               <Sparkles size={16} />
             </button>
+            </div>
+
+            <div className="flex gap-2">
+              <Link
+                to={`/discussions?projectId=${project.id}`}
+                onClick={() =>
+                  dispatch(
+                    ensureDiscussionThread({
+                      authorName: "Sonu Kumar",
+                      projectId: project.id,
+                      projectTitle: project.title,
+                    })
+                  )
+                }
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                <MessagesSquare size={14} />
+                Discuss
+              </Link>
+              <Link
+                to={`/projects/${project.id}`}
+                className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-emerald-700"
+              >
+                <ExternalLink size={14} />
+                View
+              </Link>
+            </div>
           </div>
 
-          <div className="flex gap-2">
-            <Link
-              to={`/discussions?projectId=${project.id}`}
-              onClick={() =>
-                dispatch(
-                  ensureDiscussionThread({
-                    authorName: "Sonu Kumar",
-                    projectId: project.id,
-                    projectTitle: project.title,
-                  })
-                )
-              }
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              <MessagesSquare size={14} />
-              Discuss
-            </Link>
-            <Link
-              to={`/projects/${project.id}`}
-              className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1.5 text-[11px] font-medium text-white transition hover:bg-emerald-700"
-            >
-              <ExternalLink size={14} />
-              View
-            </Link>
-          </div>
+          {showComments ? (
+            <div className="relative mt-3">
+              <CommentModal
+                onClose={() => setShowComments(false)}
+                title="Project comments"
+                subtitle="Leave a real comment directly on this build room."
+                emptyMessage="No comments yet. Be the first to leave feedback on this project."
+                placeholder="Write a project comment..."
+                projectId={project.id}
+                inline
+              />
+            </div>
+          ) : null}
         </div>
       </div>
 
