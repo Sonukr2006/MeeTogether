@@ -1,12 +1,41 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { TtlCache } from 'src/common/utils/ttl-cache';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateMessageDto } from './dto/create-message.dto';
 
 @Injectable()
 export class DiscussionsService {
+  private readonly projectThreadsCache = new TtlCache<
+    {
+      id: string;
+      projectId: string;
+      title: string;
+      createdBy: string;
+      createdByUser: { id: string; name: string };
+      lastActivity: Date;
+      messageCount: number;
+    }[]
+  >(30_000);
+  private readonly threadMessagesCache = new TtlCache<
+    {
+      id: string;
+      threadId: string;
+      author: string;
+      authorUser: { id: string; name: string };
+      role: string;
+      message: string;
+      sentAt: Date;
+    }[]
+  >(30_000);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getThreadsForProject(projectId: string) {
+    const cached = this.projectThreadsCache.get(projectId);
+    if (cached) {
+      return cached;
+    }
+
     const threads = await this.prisma.discussionThread.findMany({
       where: { projectId },
       include: {
@@ -25,7 +54,7 @@ export class DiscussionsService {
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'asc' }],
     });
 
-    return threads.map((thread) => ({
+    const mapped = threads.map((thread) => ({
       id: thread.id,
       projectId: thread.projectId,
       title: thread.title,
@@ -34,9 +63,17 @@ export class DiscussionsService {
       lastActivity: thread.lastMessageAt ?? thread.createdAt,
       messageCount: thread._count.messages,
     }));
+
+    this.projectThreadsCache.set(projectId, mapped);
+    return mapped;
   }
 
   async getMessagesForThread(threadId: string) {
+    const cached = this.threadMessagesCache.get(threadId);
+    if (cached) {
+      return cached;
+    }
+
     const thread = await this.prisma.discussionThread.findUnique({
       where: { id: threadId },
       include: {
@@ -59,7 +96,7 @@ export class DiscussionsService {
       throw new NotFoundException('Discussion thread not found');
     }
 
-    return thread.messages.map((message) => ({
+    const mapped = thread.messages.map((message) => ({
       id: message.id,
       threadId: thread.id,
       author: message.author.name,
@@ -71,6 +108,9 @@ export class DiscussionsService {
       message: message.message,
       sentAt: message.createdAt,
     }));
+
+    this.threadMessagesCache.set(threadId, mapped);
+    return mapped;
   }
 
   async createMessage(threadId: string, userId: string, createMessageDto: CreateMessageDto) {
@@ -132,6 +172,9 @@ export class DiscussionsService {
         lastReadMessageId: message.id,
       },
     });
+
+    this.threadMessagesCache.clear(threadId);
+    this.projectThreadsCache.clear(thread.projectId);
 
     return {
       id: message.id,
