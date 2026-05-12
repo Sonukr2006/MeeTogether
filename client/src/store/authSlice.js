@@ -36,29 +36,29 @@ export const restoreSession = createAsyncThunk(
   async (_, { getState }) => {
     const token = getState().auth.accessToken;
 
-    if (!token) {
-      throw new Error("Missing access token");
+    if (token) {
+      try {
+        const user = await apiRequest("/auth/me", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        return {
+          user,
+          accessToken: token,
+        };
+      } catch (error) {
+        const message = error?.message?.toLowerCase?.() ?? "";
+
+        if (!message.includes("unauthorized")) {
+          throw error;
+        }
+      }
     }
 
     try {
-      const user = await apiRequest("/auth/me", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      return {
-        user,
-        accessToken: token,
-      };
-    } catch (error) {
-      const message = error?.message?.toLowerCase?.() ?? "";
-
-      if (!message.includes("unauthorized")) {
-        throw error;
-      }
-
       const refreshed = await apiRequest("/auth/refresh", {
         method: "POST",
       });
@@ -67,6 +67,14 @@ export const restoreSession = createAsyncThunk(
         user: refreshed.user,
         accessToken: refreshed.accessToken,
       };
+    } catch (error) {
+      const message = error?.message?.toLowerCase?.() ?? "";
+
+      if (!message.includes("unauthorized")) {
+        throw error;
+      }
+
+      return null;
     }
   }
 );
@@ -103,8 +111,8 @@ const authSlice = createSlice({
     accessToken: initialToken,
     currentUser: initialUser,
     status: "idle",
-    initialized: !initialToken || Boolean(initialUser),
-    needsSessionRefresh: Boolean(initialToken),
+    initialized: false,
+    needsSessionRefresh: true,
     error: null,
   },
   reducers: {
@@ -171,20 +179,25 @@ const authSlice = createSlice({
       })
       .addCase(restoreSession.fulfilled, (state, action) => {
         state.status = "succeeded";
-        state.currentUser = action.payload.user;
-        state.accessToken = action.payload.accessToken;
+        state.currentUser = action.payload?.user ?? null;
+        state.accessToken = action.payload?.accessToken ?? null;
         state.initialized = true;
         state.needsSessionRefresh = false;
-        localStorage.setItem(AUTH_TOKEN_KEY, action.payload.accessToken);
-        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(action.payload.user));
+        if (action.payload?.accessToken && action.payload?.user) {
+          localStorage.setItem(AUTH_TOKEN_KEY, action.payload.accessToken);
+          localStorage.setItem(AUTH_USER_KEY, JSON.stringify(action.payload.user));
+        } else {
+          localStorage.removeItem(AUTH_TOKEN_KEY);
+          localStorage.removeItem(AUTH_USER_KEY);
+        }
       })
       .addCase(restoreSession.rejected, (state, action) => {
-        state.status = "failed";
+        state.status = "idle";
         state.currentUser = null;
         state.accessToken = null;
         state.initialized = true;
         state.needsSessionRefresh = false;
-        state.error = action.error.message ?? "Failed to restore session";
+        state.error = null;
         localStorage.removeItem(AUTH_TOKEN_KEY);
         localStorage.removeItem(AUTH_USER_KEY);
       })

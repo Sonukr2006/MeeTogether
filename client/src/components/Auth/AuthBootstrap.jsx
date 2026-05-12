@@ -1,24 +1,16 @@
 import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { bootstrapComplete, restoreSession } from "../../store/authSlice";
+import { restoreSession } from "../../store/authSlice";
 
 const AuthBootstrap = () => {
   const dispatch = useDispatch();
-  const { accessToken, initialized, needsSessionRefresh } = useSelector(
-    (state) => state.auth
-  );
+  const { initialized, needsSessionRefresh } = useSelector((state) => state.auth);
 
   useEffect(() => {
-    if (accessToken && needsSessionRefresh) {
+    if (needsSessionRefresh && !initialized) {
       dispatch(restoreSession());
     }
-  }, [accessToken, dispatch, needsSessionRefresh]);
-
-  useEffect(() => {
-    if (!accessToken && !initialized) {
-      dispatch(bootstrapComplete());
-    }
-  }, [accessToken, dispatch, initialized]);
+  }, [dispatch, initialized, needsSessionRefresh]);
 
   return null;
 };
