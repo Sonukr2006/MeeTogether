@@ -105,17 +105,21 @@ const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="hidden md:block">
+            <ThemeToggle className="rounded-full" />
+          </div>
           {currentUser ? (
             <div className="relative hidden md:block">
               <button
                 type="button"
                 onClick={() => setIsCreateMenuOpen((open) => !open)}
-                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white transition hover:bg-emerald-700"
                 aria-expanded={isCreateMenuOpen}
                 aria-haspopup="menu"
+                aria-label="Create"
+                title="Create"
               >
                 <PlusCircle size={16} />
-                Create
               </button>
 
               {isCreateMenuOpen ? (
@@ -150,15 +154,33 @@ const Navbar = () => {
               ) : null}
             </div>
           ) : null}
+          {initialized && currentUser ? (
+            <button
+              type="button"
+              onClick={openLogoutConfirm}
+              className="hidden h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700 transition hover:bg-rose-100 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200 dark:hover:bg-rose-950/60 md:inline-flex"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut size={15} />
+            </button>
+          ) : null}
           <Link
             to={profileTarget}
-            className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-900 dark:text-slate-300 sm:h-10 sm:w-10 md:border md:border-slate-300 md:dark:border-white/10 md:rounded-xl"
+            className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-900 dark:text-slate-300 sm:h-10 sm:w-10 md:border md:border-slate-300 md:rounded-full md:dark:border-white/10"
             aria-label={
               !initialized
                 ? "Checking your session"
                 : currentUser
                   ? "Open Proof Profile"
                   : "Open Sign In"
+            }
+            title={
+              !initialized
+                ? "Checking your session"
+                : currentUser
+                  ? "Profile"
+                  : "Sign in"
             }
             onClick={(event) => {
               if (!initialized) {
@@ -178,13 +200,20 @@ const Navbar = () => {
           </Link>
           <Link
             to={requestsTarget}
-            className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-900 dark:text-slate-300 sm:h-10 sm:w-10 md:border md:border-slate-300 md:dark:border-white/10 md:rounded-xl"
+            className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 dark:bg-slate-900 dark:text-slate-300 sm:h-10 sm:w-10 md:border md:border-slate-300 md:rounded-full md:dark:border-white/10"
             aria-label={
               !initialized
                 ? "Checking your session"
                 : currentUser
                   ? "Open Requests Center"
                   : "Open Sign In"
+            }
+            title={
+              !initialized
+                ? "Checking your session"
+                : currentUser
+                  ? "Requests"
+                  : "Sign in"
             }
             onClick={(event) => {
               if (!initialized) {

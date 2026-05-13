@@ -15,7 +15,7 @@ const getInitialTheme = () => {
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 };
 
-function ThemeToggle() {
+function ThemeToggle({ className = "" }) {
   const [isDark, setIsDark] = useState(getInitialTheme);
 
   useEffect(() => {
@@ -28,7 +28,7 @@ function ThemeToggle() {
     <button
       type="button"
       onClick={() => setIsDark((prev) => !prev)}
-      className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800"
+      className={`flex h-10 w-10 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100 dark:border-white/10 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white ${className}`}
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       title={isDark ? "Light mode" : "Dark mode"}
     >
