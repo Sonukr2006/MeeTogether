@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -14,11 +14,6 @@ import {
 import { apiRequest } from "../../lib/api";
 import PageLoadingState from "../ui/PageLoadingState";
 import { fetchProjects } from "../../store/projectsSlice";
-import {
-  addDiscussionMessage,
-  ensureDiscussionThread,
-  setActiveDiscussionThread,
-} from "../../store/projectDiscussionsSlice";
 
 const Discussions = () => {
   const dispatch = useDispatch();
@@ -26,23 +21,25 @@ const Discussions = () => {
   const [messageText, setMessageText] = useState("");
   const [roomQuery, setRoomQuery] = useState("");
   const [showMobileInbox, setShowMobileInbox] = useState(false);
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isThreadsLoading, setIsThreadsLoading] = useState(false);
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
   const [backendThreads, setBackendThreads] = useState({});
   const [backendMessages, setBackendMessages] = useState({});
+  const [threadsErrorByProject, setThreadsErrorByProject] = useState({});
+  const [messagesErrorByThread, setMessagesErrorByThread] = useState({});
+  const [threadReloadTick, setThreadReloadTick] = useState(0);
+  const [messageReloadTick, setMessageReloadTick] = useState(0);
   const [activeBackendThreadByProject, setActiveBackendThreadByProject] = useState(
     {},
   );
+  const [sendError, setSendError] = useState("");
+  const composerRef = useRef(null);
   const projectIdParam = searchParams.get("projectId");
   const currentUser = useSelector((state) => state.auth.currentUser);
   const accessToken = useSelector((state) => state.auth.accessToken);
   const projectItems = useSelector((state) => state.projects.items);
   const projectsStatus = useSelector((state) => state.projects.status);
-
-  const threadsByProject = useSelector((state) => state.projectDiscussions.threadsByProject);
-  const activeThreadByProject = useSelector(
-    (state) => state.projectDiscussions.activeThreadByProject
-  );
 
   const selectedProject = useMemo(() => {
     if (projectItems.length === 0) {
@@ -82,18 +79,72 @@ const Discussions = () => {
     });
   }, [projectItems, roomQuery]);
 
-  const fallbackThreads = threadsByProject[selectedProjectId] || [];
-  const fallbackActiveThreadId = activeThreadByProject[selectedProjectId];
   const liveThreads = backendThreads[selectedProjectId];
-  const selectedThreads = liveThreads ?? fallbackThreads;
-  const activeThreadId = activeBackendThreadByProject[selectedProjectId] ?? fallbackActiveThreadId;
+  const selectedThreads = liveThreads ?? [];
+  const activeThreadId = activeBackendThreadByProject[selectedProjectId] ?? null;
   const selectedMessageList = activeThreadId
     ? backendMessages[activeThreadId]
     : null;
+  const threadsLoadError = threadsErrorByProject[selectedProjectId] ?? "";
   const activeThread =
     selectedThreads.find((thread) => thread.id === activeThreadId) ||
     selectedThreads[0];
+  const messagesLoadError = activeThread?.id
+    ? messagesErrorByThread[activeThread.id] ?? ""
+    : "";
   const showThreadList = selectedThreads.length > 1;
+
+  useEffect(() => {
+    const textarea = composerRef.current;
+
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "0px";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+  }, [messageText]);
+
+  const formatActivityTime = (value) => {
+    if (!value) {
+      return "";
+    }
+
+    const date = value instanceof Date ? value : new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+
+    return date.toLocaleDateString([], {
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const retryThreadLoad = () => {
+    if (!selectedProjectId) {
+      return;
+    }
+
+    setThreadsErrorByProject((prev) => ({
+      ...prev,
+      [selectedProjectId]: "",
+    }));
+    setThreadReloadTick((value) => value + 1);
+  };
+
+  const retryMessageLoad = () => {
+    if (!activeThread?.id) {
+      return;
+    }
+
+    setMessagesErrorByThread((prev) => ({
+      ...prev,
+      [activeThread.id]: "",
+    }));
+    setMessageReloadTick((value) => value + 1);
+  };
 
   useEffect(() => {
     dispatch(fetchProjects());
@@ -106,16 +157,7 @@ const Discussions = () => {
 
     if (!projectIdParam) {
       setSearchParams({ projectId: String(selectedProject.id) }, { replace: true });
-      return;
     }
-
-    dispatch(
-      ensureDiscussionThread({
-        authorName: "Sonu Kumar",
-        projectId: selectedProject.id,
-        projectTitle: selectedProject.title,
-      })
-    );
   }, [
     dispatch,
     projectIdParam,
@@ -136,17 +178,29 @@ const Discussions = () => {
         const data = await apiRequest(`/projects/${selectedProjectId}/threads`);
 
         if (!ignore && Array.isArray(data)) {
+          setThreadsErrorByProject((prev) => ({
+            ...prev,
+            [selectedProjectId]: "",
+          }));
           setBackendThreads((prev) => ({
             ...prev,
             [selectedProjectId]: data,
           }));
           setActiveBackendThreadByProject((prev) => ({
             ...prev,
-            [selectedProjectId]: data[0]?.id ?? null,
+            [selectedProjectId]:
+              data.find((thread) => thread.id === prev[selectedProjectId])?.id ??
+              data[0]?.id ??
+              null,
           }));
         }
-      } catch {
+      } catch (error) {
         if (!ignore) {
+          setThreadsErrorByProject((prev) => ({
+            ...prev,
+            [selectedProjectId]:
+              error?.message || "We couldn't load the discussion rooms right now.",
+          }));
           setBackendThreads((prev) => ({
             ...prev,
             [selectedProjectId]: null,
@@ -164,13 +218,13 @@ const Discussions = () => {
     return () => {
       ignore = true;
     };
-  }, [selectedProjectId]);
+  }, [selectedProjectId, threadReloadTick]);
 
   useEffect(() => {
     let ignore = false;
 
     const loadMessages = async () => {
-      if (!activeThread?.id || !liveThreads) {
+      if (!activeThread?.id || !selectedProjectId) {
         return;
       }
 
@@ -179,6 +233,10 @@ const Discussions = () => {
         const data = await apiRequest(`/threads/${activeThread.id}/messages`);
 
         if (!ignore && Array.isArray(data)) {
+          setMessagesErrorByThread((prev) => ({
+            ...prev,
+            [activeThread.id]: "",
+          }));
           setBackendMessages((prev) => ({
             ...prev,
             [activeThread.id]: data.map((message) => ({
@@ -195,6 +253,7 @@ const Discussions = () => {
               await apiRequest(`/threads/${activeThread.id}/read`, {
                 method: "POST",
               });
+              markThreadReadLocally(selectedProjectId, activeThread.id);
             } catch (error) {
               const message = error?.message?.toLowerCase?.() ?? "";
 
@@ -204,8 +263,18 @@ const Discussions = () => {
             }
           }
         }
-      } catch {
-        // fallback to local discussion state
+      } catch (error) {
+        if (!ignore) {
+          setMessagesErrorByThread((prev) => ({
+            ...prev,
+            [activeThread.id]:
+              error?.message || "We couldn't load the conversation right now.",
+          }));
+          setBackendMessages((prev) => ({
+            ...prev,
+            [activeThread.id]: null,
+          }));
+        }
       } finally {
         if (!ignore) {
           setIsMessagesLoading(false);
@@ -218,66 +287,125 @@ const Discussions = () => {
     return () => {
       ignore = true;
     };
-  }, [accessToken, activeThread?.id, currentUser?.id, liveThreads]);
+  }, [accessToken, activeThread?.id, currentUser?.id, messageReloadTick, selectedProjectId]);
 
   const handleProjectSelect = (projectId) => {
     setSearchParams({ projectId: String(projectId) });
     setShowMobileInbox(false);
   };
 
+  const markThreadReadLocally = (projectId, threadId) => {
+    setBackendThreads((prev) => {
+      const threads = prev[projectId];
+
+      if (!Array.isArray(threads)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [projectId]: threads.map((thread) => {
+          if (thread.id !== threadId) {
+            return thread;
+          }
+
+          if (!thread.unreadCount && thread.hasUnread === false) {
+            return thread;
+          }
+
+          return {
+            ...thread,
+            unreadCount: 0,
+            hasUnread: false,
+          };
+        }),
+      };
+    });
+  };
+
   const handleMessageSubmit = async (event) => {
     event.preventDefault();
 
-    if (!messageText.trim()) {
+    if (!messageText.trim() || isSendingMessage) {
       return;
     }
 
-    if (activeThread?.id && liveThreads) {
-      try {
-        const createdMessage = await apiRequest(`/threads/${activeThread.id}/messages`, {
-          method: "POST",
-          body: JSON.stringify({
-            message: messageText.trim(),
-          }),
-        });
-
-        setBackendMessages((prev) => ({
-          ...prev,
-          [activeThread.id]: [
-            ...(prev[activeThread.id] ?? []),
-            {
-              ...createdMessage,
-              sentAt: new Date(createdMessage.sentAt).toLocaleTimeString([], {
-                hour: "numeric",
-                minute: "2-digit",
-              }),
-            },
-          ],
-        }));
-      } catch {
-        dispatch(
-          addDiscussionMessage({
-            author: currentUser?.name ?? "Sonu Kumar",
-            message: messageText.trim(),
-            projectId: selectedProject.id,
-            projectTitle: selectedProject.title,
-            role: currentUser?.title ?? "Student Builder",
-          }),
-        );
-      }
-    } else {
-      dispatch(
-        addDiscussionMessage({
-          author: currentUser?.name ?? "Sonu Kumar",
-          message: messageText.trim(),
-          projectId: selectedProject.id,
-          projectTitle: selectedProject.title,
-          role: currentUser?.title ?? "Student Builder",
-        }),
-      );
+    if (!activeThread?.id || !liveThreads) {
+      return;
     }
 
-    setMessageText("");
+    try {
+      setIsSendingMessage(true);
+      setSendError("");
+
+      const createdMessage = await apiRequest(`/threads/${activeThread.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({
+          message: messageText.trim(),
+        }),
+      });
+
+      setBackendMessages((prev) => ({
+        ...prev,
+        [activeThread.id]: [
+          ...(prev[activeThread.id] ?? []),
+          {
+            ...createdMessage,
+            sentAt: new Date(createdMessage.sentAt).toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+            }),
+          },
+        ],
+      }));
+      setBackendThreads((prev) => {
+        const threads = prev[selectedProjectId];
+
+        if (!Array.isArray(threads)) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [selectedProjectId]: threads.map((thread) =>
+            thread.id === activeThread.id
+              ? {
+                  ...thread,
+                  unreadCount: 0,
+                  hasUnread: false,
+                  messageCount: (thread.messageCount ?? 0) + 1,
+                  lastActivity: createdMessage.sentAt,
+                  lastMessagePreview: createdMessage.message,
+                }
+              : thread,
+          ),
+        };
+      });
+
+      setMessagesErrorByThread((prev) => ({
+        ...prev,
+        [activeThread.id]: "",
+      }));
+      setMessageText("");
+    } catch (error) {
+      setSendError(error?.message || "We couldn't send that message. Try again.");
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  const handleComposerKeyDown = (event) => {
+    if (event.key !== "Enter" || event.shiftKey) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (!messageText.trim() || isSendingMessage) {
+      return;
+    }
+
+    handleMessageSubmit(event);
   };
 
   if (projectsStatus === "loading" && projectItems.length === 0) {
@@ -345,12 +473,33 @@ const Discussions = () => {
                   onClick={() => handleProjectSelect(project.id)}
                   className={`w-full rounded-lg border p-3 text-left transition ${
                     String(project.id) === selectedProjectId
-                      ? "border-emerald-200 bg-white dark:border-emerald-500/20 dark:bg-slate-900"
+                      ? "border-emerald-500 bg-emerald-50 shadow-[inset_4px_0_0_0_rgba(16,185,129,1),0_10px_24px_rgba(15,23,42,0.08)] dark:border-emerald-400/50 dark:bg-slate-900"
                       : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800"
                   }`}
                 >
-                  <p className="text-sm font-semibold">{project.title}</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                  <div className="flex items-start justify-between gap-3">
+                    <p
+                      className={`text-sm font-semibold ${
+                        String(project.id) === selectedProjectId
+                          ? "text-emerald-800 dark:text-emerald-100"
+                          : ""
+                      }`}
+                    >
+                      {project.title}
+                    </p>
+                    {String(project.id) === selectedProjectId ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200">
+                        Open
+                      </span>
+                    ) : null}
+                  </div>
+                  <div
+                    className={`mt-2 flex flex-wrap items-center gap-2 text-[11px] ${
+                      String(project.id) === selectedProjectId
+                        ? "text-emerald-700/80 dark:text-emerald-200/80"
+                        : "text-slate-500 dark:text-slate-400"
+                    }`}
+                  >
                     <span className="rounded-md bg-white px-2 py-1 dark:bg-slate-900">
                       {project.openRoles.length} roles open
                     </span>
@@ -420,6 +569,18 @@ const Discussions = () => {
                   </div>
 
                   <div className="mt-3 space-y-2">
+                    {threadsLoadError ? (
+                      <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200">
+                        <p>{threadsLoadError}</p>
+                        <button
+                          type="button"
+                          onClick={retryThreadLoad}
+                          className="mt-2 inline-flex rounded-md border border-rose-200 px-2 py-1 font-medium text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/20 dark:text-rose-200 dark:hover:bg-rose-500/10"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : null}
                     {isThreadsLoading && selectedThreads.length === 0 ? (
                       <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
                         Loading project threads...
@@ -432,12 +593,33 @@ const Discussions = () => {
                         onClick={() => handleProjectSelect(project.id)}
                         className={`block w-full rounded-lg border px-3 py-2 text-left transition ${
                           String(project.id) === selectedProjectId
-                            ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10"
+                            ? "border-emerald-500 bg-emerald-100 shadow-[0_0_0_1px_rgba(16,185,129,0.18),0_8px_20px_rgba(16,185,129,0.12)] dark:border-emerald-400 dark:bg-emerald-500/20"
                             : "border-slate-200 bg-white dark:border-slate-700 dark:bg-[#383a40]"
                         }`}
                       >
-                        <p className="text-sm font-semibold">{project.title}</p>
-                        <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                        <div className="flex items-start justify-between gap-2">
+                          <p
+                            className={`text-sm font-semibold ${
+                              String(project.id) === selectedProjectId
+                                ? "text-emerald-800 dark:text-emerald-100"
+                                : ""
+                            }`}
+                          >
+                            {project.title}
+                          </p>
+                          {String(project.id) === selectedProjectId ? (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200">
+                              Open
+                            </span>
+                          ) : null}
+                        </div>
+                        <p
+                          className={`mt-1 text-[11px] ${
+                            String(project.id) === selectedProjectId
+                              ? "text-emerald-700/80 dark:text-emerald-200/80"
+                              : "text-slate-500 dark:text-slate-400"
+                          }`}
+                        >
                           {project.openRoles.length} roles open
                         </p>
                       </button>
@@ -451,28 +633,31 @@ const Discussions = () => {
                           key={thread.id}
                           type="button"
                           onClick={() => {
-                            if (liveThreads) {
-                              setActiveBackendThreadByProject((prev) => ({
-                                ...prev,
-                                [selectedProjectId]: thread.id,
-                              }));
-                            } else {
-                              dispatch(
-                                setActiveDiscussionThread({
-                                  projectId: selectedProject.id,
-                                  threadId: thread.id,
-                                })
-                              );
-                            }
+                            setActiveBackendThreadByProject((prev) => ({
+                              ...prev,
+                              [selectedProjectId]: thread.id,
+                            }));
                             setShowMobileInbox(false);
                           }}
                           className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
                             activeThread?.id === thread.id
-                              ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-300"
+                              ? "border-emerald-500 bg-emerald-100 text-emerald-800 shadow-[0_0_0_1px_rgba(16,185,129,0.18),0_8px_20px_rgba(16,185,129,0.12)] dark:border-emerald-400 dark:bg-emerald-500/20 dark:text-emerald-100"
                               : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#383a40] dark:text-slate-300"
                           }`}
                         >
-                          {thread.title}
+                          <span className="inline-flex items-center gap-2">
+                            <span>{thread.title}</span>
+                            {thread.unreadCount > 0 ? (
+                              <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                {thread.unreadCount}
+                              </span>
+                            ) : null}
+                            {activeThread?.id === thread.id ? (
+                              <span className="text-[10px] uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
+                                Open
+                              </span>
+                            ) : null}
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -486,6 +671,11 @@ const Discussions = () => {
                 <div className="flex items-center gap-2">
                   <Hash size={16} className="text-slate-400 dark:text-slate-500" />
                   <h2 className="truncate text-lg font-semibold">{selectedProject.title}</h2>
+                  {activeThread ? (
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200">
+                      {activeThread.title}
+                    </span>
+                  ) : null}
                 </div>
                 <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
                   {activeThread
@@ -494,7 +684,7 @@ const Discussions = () => {
                         activeThread.messageCount ??
                         activeThread.messages?.length ??
                         0
-                      } messages`
+                      } messages${activeThread.unreadCount > 0 ? ` · ${activeThread.unreadCount} new` : ""}`
                     : "Start the channel conversation."}
                 </p>
               </div>
@@ -521,6 +711,18 @@ const Discussions = () => {
                     Channels
                   </div>
                   <div className="space-y-2">
+                    {threadsLoadError ? (
+                      <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200">
+                        <p>{threadsLoadError}</p>
+                        <button
+                          type="button"
+                          onClick={retryThreadLoad}
+                          className="mt-2 inline-flex rounded-md border border-rose-200 px-2 py-1 font-medium text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/20 dark:text-rose-200 dark:hover:bg-rose-500/10"
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    ) : null}
                     {isThreadsLoading && selectedThreads.length === 0 ? (
                       <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-500 dark:border-slate-800 dark:bg-[#35373c] dark:text-slate-400">
                         Loading project threads...
@@ -531,41 +733,78 @@ const Discussions = () => {
                         key={thread.id}
                         type="button"
                         onClick={() =>
-                          liveThreads
-                            ? setActiveBackendThreadByProject((prev) => ({
-                                ...prev,
-                                [selectedProjectId]: thread.id,
-                              }))
-                            : dispatch(
-                                setActiveDiscussionThread({
-                                  projectId: selectedProject.id,
-                                  threadId: thread.id,
-                                })
-                              )
+                          setActiveBackendThreadByProject((prev) => ({
+                            ...prev,
+                            [selectedProjectId]: thread.id,
+                          }))
                         }
-                      className={`w-full rounded-lg border p-3 text-left transition ${
-                        activeThread?.id === thread.id
-                          ? "border-emerald-200 bg-white dark:border-emerald-500/20 dark:bg-[#404249]"
-                          : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-transparent dark:hover:bg-[#35373c]"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <p className="flex items-center gap-1.5 text-sm font-semibold">
-                          <Hash size={13} className="text-slate-400 dark:text-slate-500" />
-                          {thread.title}
-                        </p>
-                        <span className="text-[11px] text-slate-400">
-                          {typeof thread.lastActivity === "string"
-                            ? thread.lastActivity
-                            : new Date(thread.lastActivity).toLocaleDateString()}
-                        </span>
-                      </div>
-                        <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400">
+                        className={`w-full rounded-lg border p-3 text-left transition ${
+                          activeThread?.id === thread.id
+                            ? "border-emerald-500 bg-emerald-50 shadow-[inset_4px_0_0_0_rgba(16,185,129,1),0_10px_24px_rgba(15,23,42,0.08)] dark:border-emerald-400/50 dark:bg-[#404249]"
+                            : "border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-800 dark:bg-transparent dark:hover:bg-[#35373c]"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <p
+                            className={`flex items-center gap-1.5 text-sm font-semibold ${
+                              activeThread?.id === thread.id
+                                ? "text-emerald-800 dark:text-emerald-100"
+                                : ""
+                            }`}
+                          >
+                            <Hash
+                              size={13}
+                              className={
+                                activeThread?.id === thread.id
+                                  ? "text-emerald-600 dark:text-emerald-300"
+                                  : "text-slate-400 dark:text-slate-500"
+                              }
+                            />
+                            {thread.title}
+                          </p>
+                          <span
+                            className={`text-[11px] ${
+                              activeThread?.id === thread.id
+                                ? "text-emerald-600/80 dark:text-emerald-200/80"
+                                : "text-slate-400"
+                            }`}
+                          >
+                            {formatActivityTime(thread.lastActivity)}
+                          </span>
+                        </div>
+                        <div
+                          className={`mt-2 flex items-center gap-2 text-[11px] ${
+                            activeThread?.id === thread.id
+                              ? "text-emerald-700/80 dark:text-emerald-200/80"
+                              : "text-slate-500 dark:text-slate-400"
+                          }`}
+                        >
                           <Users size={12} />
                           <span>
                             {thread.messageCount ?? thread.messages?.length ?? 0} updates
                           </span>
+                          {thread.unreadCount > 0 ? (
+                            <span className="rounded-full bg-emerald-600 px-2 py-0.5 font-semibold text-white">
+                              {thread.unreadCount} new
+                            </span>
+                          ) : null}
+                          {activeThread?.id === thread.id ? (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-200">
+                              Open
+                            </span>
+                          ) : null}
                         </div>
+                        <p
+                          className={`mt-2 line-clamp-2 text-xs leading-5 ${
+                            activeThread?.id === thread.id
+                              ? "text-emerald-900/75 dark:text-emerald-100/75"
+                              : "text-slate-500 dark:text-slate-400"
+                          }`}
+                        >
+                          {thread.lastMessagePreview
+                            ? thread.lastMessagePreview
+                            : `Created by ${thread.createdBy}. Open the room to start the conversation.`}
+                        </p>
                       </button>
                     ))}
                   </div>
@@ -593,12 +832,30 @@ const Discussions = () => {
                           </p>
                         </div>
                       </div>
+                    ) : messagesLoadError ? (
+                      <div className="flex h-full items-center justify-center">
+                        <div className="rounded-lg border border-rose-200 bg-rose-50 p-6 text-center dark:border-rose-500/20 dark:bg-rose-500/10">
+                          <p className="text-sm font-medium text-rose-700 dark:text-rose-200">
+                            Couldn&apos;t load this conversation.
+                          </p>
+                          <p className="mt-1 text-xs text-rose-600 dark:text-rose-300">
+                            {messagesLoadError}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={retryMessageLoad}
+                            className="mt-3 inline-flex rounded-md border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 transition hover:bg-rose-100 dark:border-rose-500/20 dark:text-rose-200 dark:hover:bg-rose-500/10"
+                          >
+                            Retry loading messages
+                          </button>
+                        </div>
+                      </div>
                     ) : (selectedMessageList || activeThread?.messages || []).length > 0 ? (
                       <div className="space-y-3">
                         {(selectedMessageList || activeThread?.messages || []).map((discussion) => {
                           const authorInitial = discussion.author.charAt(0).toUpperCase();
                           const isCurrentUser =
-                            discussion.author === (currentUser?.name ?? "Sonu Kumar");
+                            discussion.authorUser?.id === currentUser?.id;
 
                           return (
                             <div
@@ -654,21 +911,34 @@ const Discussions = () => {
                   onSubmit={handleMessageSubmit}
                   className="border-t border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-[#2b2d31]"
                 >
+                  {sendError ? (
+                    <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-200">
+                      {sendError}
+                    </div>
+                  ) : null}
                   <div className="flex w-full gap-2">
-                    <input
+                    <textarea
+                      ref={composerRef}
                       value={messageText}
                       onChange={(event) => setMessageText(event.target.value)}
+                      onKeyDown={handleComposerKeyDown}
                       placeholder={`Message ${selectedProject.title} discussion`}
-                      className="min-w-0 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 dark:border-[#3f4147] dark:bg-[#383a40] dark:text-slate-100"
+                      disabled={isSendingMessage}
+                      rows={1}
+                      className="min-h-[44px] max-h-40 min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-emerald-500 dark:border-[#3f4147] dark:bg-[#383a40] dark:text-slate-100"
                     />
                     <button
                       type="submit"
-                      disabled={!messageText.trim()}
+                      disabled={!messageText.trim() || isSendingMessage}
                       className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 dark:disabled:bg-slate-700"
                       aria-label="Send discussion message"
-                      title="Send"
+                      title={isSendingMessage ? "Sending" : "Send"}
                     >
-                      <Send size={16} />
+                      {isSendingMessage ? (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/70 border-t-transparent" />
+                      ) : (
+                        <Send size={16} />
+                      )}
                     </button>
                   </div>
                 </form>

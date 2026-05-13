@@ -3,7 +3,6 @@ import authReducer from "./authSlice";
 import opportunityRequestsReducer from "./opportunityRequestsSlice";
 import postInteractionsReducer from "./postInteractionsSlice";
 import postsReducer from "./postsSlice";
-import projectDiscussionsReducer from "./projectDiscussionsSlice";
 import projectInteractionsReducer from "./projectInteractionsSlice";
 import profilesReducer from "./profilesSlice";
 import projectsReducer from "./projectsSlice";
@@ -14,7 +13,6 @@ export const store = configureStore({
     opportunityRequests: opportunityRequestsReducer,
     postInteractions: postInteractionsReducer,
     posts: postsReducer,
-    projectDiscussions: projectDiscussionsReducer,
     projectInteractions: projectInteractionsReducer,
     profiles: profilesReducer,
     projects: projectsReducer,

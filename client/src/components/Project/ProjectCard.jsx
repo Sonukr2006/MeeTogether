@@ -9,7 +9,6 @@ import {
   Sparkles,
   Users,
 } from "lucide-react";
-import { ensureDiscussionThread } from "../../store/projectDiscussionsSlice";
 import {
   openAnalyzePanel,
   setProjectLikedState,
@@ -212,15 +211,6 @@ export default function ProjectCard({ project, prioritizeImage = false }) {
             <div className="flex gap-2">
               <Link
                 to={`/discussions?projectId=${project.id}`}
-                onClick={() =>
-                  dispatch(
-                    ensureDiscussionThread({
-                      authorName: "Sonu Kumar",
-                      projectId: project.id,
-                      projectTitle: project.title,
-                    })
-                  )
-                }
                 className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
               >
                 <MessagesSquare size={14} />

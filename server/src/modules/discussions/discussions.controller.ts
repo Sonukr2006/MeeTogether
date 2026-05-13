@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { VerifiedAccountGuard } from '../auth/guards/verified-account.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { CreateMessageDto } from './dto/create-message.dto';
@@ -10,9 +11,13 @@ import { DiscussionsService } from './discussions.service';
 export class DiscussionsController {
   constructor(private readonly discussionsService: DiscussionsService) {}
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Get('projects/:projectId/threads')
-  async getThreadsForProject(@Param('projectId') projectId: string) {
-    return this.discussionsService.getThreadsForProject(projectId);
+  async getThreadsForProject(
+    @Param('projectId') projectId: string,
+    @CurrentUser() user?: AuthenticatedUser,
+  ) {
+    return this.discussionsService.getThreadsForProject(projectId, user?.sub);
   }
 
   @Get('threads/:threadId/messages')

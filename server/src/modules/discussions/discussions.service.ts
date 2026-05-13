@@ -14,6 +14,9 @@ export class DiscussionsService {
       createdByUser: { id: string; name: string };
       lastActivity: Date;
       messageCount: number;
+      unreadCount: number;
+      hasUnread: boolean;
+      lastMessagePreview: string | null;
     }[]
   >(30_000);
   private readonly threadMessagesCache = new TtlCache<
@@ -30,8 +33,9 @@ export class DiscussionsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async getThreadsForProject(projectId: string) {
-    const cached = this.projectThreadsCache.get(projectId);
+  async getThreadsForProject(projectId: string, userId?: string) {
+    const cacheKey = userId ? `${projectId}:${userId}` : projectId;
+    const cached = this.projectThreadsCache.get(cacheKey);
     if (cached) {
       return cached;
     }
@@ -45,6 +49,22 @@ export class DiscussionsService {
             name: true,
           },
         },
+        messages: {
+          orderBy: [{ sequenceNumber: 'desc' }, { createdAt: 'desc' }],
+          take: 1,
+          select: {
+            message: true,
+          },
+        },
+        participantStates: userId
+          ? {
+              where: { userId },
+              select: {
+                unreadCountSnapshot: true,
+              },
+              take: 1,
+            }
+          : false,
         _count: {
           select: {
             messages: true,
@@ -54,17 +74,30 @@ export class DiscussionsService {
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'asc' }],
     });
 
-    const mapped = threads.map((thread) => ({
-      id: thread.id,
-      projectId: thread.projectId,
-      title: thread.title,
-      createdBy: thread.createdBy.name,
-      createdByUser: thread.createdBy,
-      lastActivity: thread.lastMessageAt ?? thread.createdAt,
-      messageCount: thread._count.messages,
-    }));
+    const mapped = await Promise.all(
+      threads.map(async (thread) => {
+        const participantState = thread.participantStates?.[0];
+        const unreadCount =
+          userId
+            ? participantState?.unreadCountSnapshot ?? thread._count.messages
+            : 0;
 
-    this.projectThreadsCache.set(projectId, mapped);
+        return {
+          id: thread.id,
+          projectId: thread.projectId,
+          title: thread.title,
+          createdBy: thread.createdBy.name,
+          createdByUser: thread.createdBy,
+          lastActivity: thread.lastMessageAt ?? thread.createdAt,
+          messageCount: thread._count.messages,
+          unreadCount,
+          hasUnread: unreadCount > 0,
+          lastMessagePreview: thread.messages[0]?.message ?? null,
+        };
+      }),
+    );
+
+    this.projectThreadsCache.set(cacheKey, mapped);
     return mapped;
   }
 
@@ -164,17 +197,33 @@ export class DiscussionsService {
       update: {
         lastReadAt: message.createdAt,
         lastReadMessageId: message.id,
+        unreadCountSnapshot: 0,
       },
       create: {
         threadId,
         userId,
         lastReadAt: message.createdAt,
         lastReadMessageId: message.id,
+        unreadCountSnapshot: 0,
+      },
+    });
+
+    await this.prisma.threadParticipantState.updateMany({
+      where: {
+        threadId,
+        userId: {
+          not: userId,
+        },
+      },
+      data: {
+        unreadCountSnapshot: {
+          increment: 1,
+        },
       },
     });
 
     this.threadMessagesCache.clear(threadId);
-    this.projectThreadsCache.clear(thread.projectId);
+    this.projectThreadsCache.clear();
 
     return {
       id: message.id,
@@ -206,14 +255,18 @@ export class DiscussionsService {
       update: {
         lastReadAt: new Date(),
         lastReadMessageId: latestMessage?.id,
+        unreadCountSnapshot: 0,
       },
       create: {
         threadId,
         userId,
         lastReadAt: new Date(),
         lastReadMessageId: latestMessage?.id,
+        unreadCountSnapshot: 0,
       },
     });
+
+    this.projectThreadsCache.clear();
 
     return { success: true };
   }
