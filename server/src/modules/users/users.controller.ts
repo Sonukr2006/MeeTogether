@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { VerifiedAccountGuard } from '../auth/guards/verified-account.guard';
 import { UpdateAvatarDto } from './dto/update-avatar.dto';
 import { UsersService } from './users.service';
 
@@ -15,7 +16,7 @@ export class UsersController {
     return this.usersService.getPublicUserById(userId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Patch('me/avatar')
   async updateAvatar(
     @CurrentUser() user: AuthenticatedUser,

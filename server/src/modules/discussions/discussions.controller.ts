@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { VerifiedAccountGuard } from '../auth/guards/verified-account.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { CreateMessageDto } from './dto/create-message.dto';
 import { DiscussionsService } from './discussions.service';
@@ -19,7 +20,7 @@ export class DiscussionsController {
     return this.discussionsService.getMessagesForThread(threadId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Post('threads/:threadId/messages')
   async createMessage(
     @Param('threadId') threadId: string,
@@ -29,7 +30,7 @@ export class DiscussionsController {
     return this.discussionsService.createMessage(threadId, user.sub, createMessageDto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Post('threads/:threadId/read')
   async markThreadRead(
     @Param('threadId') threadId: string,

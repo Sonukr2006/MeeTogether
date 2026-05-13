@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { VerifiedAccountGuard } from '../auth/guards/verified-account.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { SetLikeStateDto } from '../likes/dto/set-like-state.dto';
 import { CreateProjectCommentDto } from './dto/create-project-comment.dto';
@@ -26,7 +27,7 @@ export class ProjectsController {
     return this.projectsService.getComments(projectId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Post()
   async createProject(
     @CurrentUser() user: AuthenticatedUser,
@@ -35,7 +36,7 @@ export class ProjectsController {
     return this.projectsService.createProject(user.sub, createProjectDto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Post(':projectId/like')
   async setLikeState(
     @CurrentUser() user: AuthenticatedUser,
@@ -45,7 +46,7 @@ export class ProjectsController {
     return this.projectsService.setLikeState(projectId, user.sub, setLikeStateDto.liked);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Post(':projectId/comments')
   async createComment(
     @CurrentUser() user: AuthenticatedUser,

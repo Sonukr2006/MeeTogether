@@ -13,6 +13,10 @@ const RequireAuth = () => {
     return <Navigate to="/sign-in" replace state={{ from: location }} />;
   }
 
+  if (!currentUser.emailVerified) {
+    return <Navigate to="/verify-email" replace state={{ from: location }} />;
+  }
+
   return <Outlet />;
 };
 

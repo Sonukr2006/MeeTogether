@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { VerifiedAccountGuard } from '../auth/guards/verified-account.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { SetLikeStateDto } from '../likes/dto/set-like-state.dto';
 import { CreatePostCommentDto } from './dto/create-post-comment.dto';
@@ -21,7 +22,7 @@ export class PostsController {
     return this.postsService.getComments(postId);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Post()
   async createPost(
     @CurrentUser() user: AuthenticatedUser,
@@ -30,7 +31,7 @@ export class PostsController {
     return this.postsService.createPost(user.sub, createPostDto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Post(':postId/like')
   async setLikeState(
     @CurrentUser() user: AuthenticatedUser,
@@ -40,7 +41,7 @@ export class PostsController {
     return this.postsService.setLikeState(postId, user.sub, setLikeStateDto.liked);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Post(':postId/comments')
   async createComment(
     @CurrentUser() user: AuthenticatedUser,

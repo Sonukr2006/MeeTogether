@@ -22,7 +22,7 @@ const SignIn = () => {
 
   useEffect(() => {
     if (currentUser?.username) {
-      navigate(`/profile/${currentUser.username}`);
+      navigate(currentUser.emailVerified ? `/profile/${currentUser.username}` : "/verify-email");
     }
   }, [currentUser, navigate]);
 

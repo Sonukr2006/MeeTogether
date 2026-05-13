@@ -9,7 +9,7 @@ const GuestOnlyRoute = () => {
   }
 
   if (currentUser) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={currentUser.emailVerified ? "/" : "/verify-email"} replace />;
   }
 
   return <Outlet />;

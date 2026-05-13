@@ -1,12 +1,14 @@
 import { useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { apiRequest } from "../../lib/api";
 import { useAlert } from "../../contexts/AlertProvider";
 import AuthWith from "./AuthWith";
+import { restoreSession } from "../../store/authSlice";
 
 export default function VerifyEmail() {
+  const dispatch = useDispatch();
   const { showAlert } = useAlert();
   const { accessToken, currentUser } = useSelector((state) => state.auth);
   const [searchParams] = useSearchParams();
@@ -31,6 +33,10 @@ export default function VerifyEmail() {
         method: "POST",
         body: JSON.stringify({ token: tokenToVerify }),
       });
+
+      if (accessToken) {
+        await dispatch(restoreSession()).unwrap();
+      }
 
       setVerified(true);
       showAlert("Email verified successfully.", "success");
@@ -76,7 +82,7 @@ export default function VerifyEmail() {
         {verified ? (
           <div className="space-y-4 text-center text-sm text-slate-200">
             <p>Your email is verified now.</p>
-            <Link to={currentUser?.username ? `/profile/${currentUser.username}` : "/sign-in"} className="text-indigo-300 hover:underline">
+            <Link to={currentUser?.username ? "/" : "/sign-in"} className="text-indigo-300 hover:underline">
               Continue
             </Link>
           </div>
@@ -120,15 +126,21 @@ export default function VerifyEmail() {
               </button>
             </form>
 
-            <button
-              type="button"
-              disabled={resending}
-              onClick={() => void handleResend()}
-              className="mt-4 w-full flex items-center justify-center gap-2 border border-white/10 bg-white/5 text-white py-2 rounded-lg transition disabled:opacity-70"
-            >
-              {resending ? <Loader2 className="animate-spin" size={18} /> : null}
-              Resend verification
-            </button>
+            {currentUser?.emailVerified ? (
+              <div className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center text-sm text-emerald-200">
+                Your email is already verified.
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={resending || !accessToken}
+                onClick={() => void handleResend()}
+                className="mt-4 w-full flex items-center justify-center gap-2 border border-white/10 bg-white/5 text-white py-2 rounded-lg transition disabled:opacity-70"
+              >
+                {resending ? <Loader2 className="animate-spin" size={18} /> : null}
+                Resend verification
+              </button>
+            )}
 
             {verificationPreview ? (
               <div className="mt-5 rounded-xl border border-indigo-500/30 bg-slate-900/60 p-4 text-sm text-slate-200">
