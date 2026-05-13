@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { apiRequest } from "../../lib/api";
 import { useAlert } from "../../contexts/AlertProvider";
@@ -9,6 +9,8 @@ import { restoreSession } from "../../store/authSlice";
 
 export default function VerifyEmail() {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { showAlert } = useAlert();
   const { accessToken, currentUser } = useSelector((state) => state.auth);
   const [searchParams] = useSearchParams();
@@ -18,6 +20,22 @@ export default function VerifyEmail() {
   const [verified, setVerified] = useState(false);
   const [resending, setResending] = useState(false);
   const [verificationPreview, setVerificationPreview] = useState(null);
+  const continueTarget =
+    currentUser?.emailVerified && location.state?.from?.pathname
+      ? location.state.from.pathname
+      : currentUser?.emailVerified
+        ? "/"
+        : "/sign-in";
+
+  useEffect(() => {
+    if (verified || currentUser?.emailVerified) {
+      const redirectTimer = window.setTimeout(() => {
+        navigate(continueTarget, { replace: true });
+      }, 900);
+
+      return () => window.clearTimeout(redirectTimer);
+    }
+  }, [continueTarget, currentUser?.emailVerified, navigate, verified]);
 
   const handleVerify = async (overrideToken) => {
     const tokenToVerify = (overrideToken ?? token).trim();
@@ -82,7 +100,7 @@ export default function VerifyEmail() {
         {verified ? (
           <div className="space-y-4 text-center text-sm text-slate-200">
             <p>Your email is verified now.</p>
-            <Link to={currentUser?.username ? "/" : "/sign-in"} className="text-indigo-300 hover:underline">
+            <Link to={continueTarget} className="text-indigo-300 hover:underline">
               Continue
             </Link>
           </div>
