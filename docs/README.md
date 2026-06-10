@@ -70,7 +70,7 @@ These must be fixed before a real public launch.
 | Database scalability | `Partial` | Prisma schema has useful relations and some indexes, but pagination and several hot-path indexes are missing. |
 | Rate limiting | `Partial` | Auth limits exist, but production fallback behavior and broader abuse limits are not launch-grade. |
 | Observability | `Partial` | Request IDs and JSON logs exist, but structured logger, error monitoring, metrics, and readiness checks are incomplete. |
-| Tests/CI | `Not started` | Build passes, lint fails, and production-critical test coverage is missing. |
+| Tests/CI | `Partial` | GitHub Actions now runs server install, Prisma schema validation, server build, client install, and client build on push, pull request, and manual dispatch. Full lint still fails and production-critical test coverage is missing. |
 | Operations | `Not started` | Staging, backups, restore test, runbooks, rollback process, and monitoring need to be established. |
 | Documentation | `Partial` | Production README exists, but root README and older docs still need alignment with the current backend and launch model. |
 
@@ -190,7 +190,7 @@ These must be fixed before a real public launch.
 - [ ] `Not started` Add e2e smoke tests for signup, login, create project, post discussion message, save project, and request inbox.
 - [ ] `Not started` Make `npm run lint` pass in server.
 - [ ] `Not started` Make `npm run lint` pass in client.
-- [ ] `Not started` Make server build, client build, lint, tests, Prisma generate, and migrations required CI gates.
+- [ ] `Partial` Make server build, client build, lint, tests, Prisma generate, and migrations required CI gates. GitHub Actions now gates server build, client build, and Prisma schema validation; lint, tests, Prisma generate, and migration deploy checks are still missing.
 - [ ] `Partial` Add production cookie/session config test to CI.
 - [ ] `Not started` Add permission matrix tests as release blockers.
 
