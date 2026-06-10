@@ -16,6 +16,7 @@ import {
   Handshake,
   MessageCircle,
   MessageSquareQuote,
+  Pencil,
   Rocket,
   Send,
   ShieldCheck,
@@ -24,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { emptyProfile } from "../../lib/uiDefaults";
+import { mapApiProfileToUi } from "../../lib/backendMappers";
 import { useAlert } from "../../contexts/AlertProvider";
 import {
   apiRequest,
@@ -31,12 +33,16 @@ import {
   uploadFileToStorageTarget,
 } from "../../lib/api";
 import { addRequestFromProfileAction } from "../../store/opportunityRequestsSlice";
-import { updateCurrentUserAvatar } from "../../store/authSlice";
+import {
+  mergeCurrentUser,
+  updateCurrentUserAvatar,
+} from "../../store/authSlice";
 import {
   fetchProfileByUsername,
+  updateCachedProfile,
   updateCachedProfileAvatar,
 } from "../../store/profilesSlice";
-import { fetchProjects } from "../../store/projectsSlice";
+import { hydrateSavedProjects } from "../../store/projectInteractionsSlice";
 
 const profileIconMap = {
   briefcase: BriefcaseBusiness,
@@ -54,48 +60,171 @@ const profileIconMap = {
   "user-plus": UserPlus,
 };
 
+const emptyProfileForm = {
+  name: "",
+  title: "",
+  bio: "",
+  location: "",
+  openTo: "",
+  headline: "",
+  summary: "",
+  links: "",
+  skills: "",
+  trustSignals: "",
+};
+
+function serializeLines(items, formatter) {
+  return (items ?? []).map(formatter).join("\n");
+}
+
+function parsePipeLines(value, mapper) {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => mapper(line.split("|").map((part) => part.trim())))
+    .filter(Boolean);
+}
+
+function inferLinkLabel(value) {
+  try {
+    const url = new URL(value.startsWith("http") ? value : `https://${value}`);
+    const host = url.hostname.replace(/^www\./, "");
+    const [name] = host.split(".");
+    return name ? name.charAt(0).toUpperCase() + name.slice(1) : "Link";
+  } catch {
+    return "Link";
+  }
+}
+
+function normalizeExternalUrl(value) {
+  if (!value) {
+    return "#";
+  }
+
+  return value.startsWith("http://") || value.startsWith("https://")
+    ? value
+    : `https://${value}`;
+}
+
+function parseProfileLinks(value) {
+  return parsePipeLines(value, ([first, second, iconKey]) => {
+    if (first && second) {
+      return {
+        label: first,
+        value: second,
+        iconKey: iconKey || "external",
+      };
+    }
+
+    if (first) {
+      return {
+        label: inferLinkLabel(first),
+        value: first,
+        iconKey: "external",
+      };
+    }
+
+    return null;
+  });
+}
+
+function parseProfileSkills(value) {
+  const hasStructuredLines = value
+    .split("\n")
+    .some((line) => line.includes("|"));
+
+  if (!hasStructuredLines) {
+    return value
+      .split(",")
+      .map((skill) => skill.trim())
+      .filter(Boolean)
+      .map((name) => ({ name }));
+  }
+
+  return parsePipeLines(value, ([name, evidence, level]) =>
+    name
+      ? {
+          name,
+          evidence,
+          level:
+            level && Number.isFinite(Number(level)) ? Number(level) : undefined,
+        }
+      : null,
+  );
+}
+
 const Profile = () => {
   const { userId } = useParams();
   const [activeAction, setActiveAction] = useState(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState(emptyProfileForm);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const fileInputRef = useRef(null);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { showAlert } = useAlert();
   const currentUser = useSelector((state) => state.auth.currentUser);
-  const { savedProjects } = useSelector((state) => state.projectInteractions);
-  const projectCatalog = useSelector((state) => state.projects.items);
   const profileEntry = useSelector((state) =>
     userId ? state.profiles.byUsername[userId] : null,
   );
-  const profileData = profileEntry?.profile ?? {
-    ...emptyProfile,
-    username: userId ?? emptyProfile.username,
-  };
-  const savedProjectList = useMemo(
-    () => projectCatalog.filter((project) => savedProjects[project.id]),
-    [projectCatalog, savedProjects],
-  );
-  const ownedProjects = useMemo(
+  const profileData = useMemo(
     () =>
-      projectCatalog.filter(
-        (project) =>
-          project.user.username === profileData.username ||
-          project.user.name === profileData.name,
-      ),
-    [profileData.name, profileData.username, projectCatalog],
+      profileEntry?.profile ?? {
+        ...emptyProfile,
+        username: userId ?? emptyProfile.username,
+      },
+    [profileEntry?.profile, userId],
   );
+  const savedProjectList = useMemo(
+    () => profileData.savedProjects ?? [],
+    [profileData.savedProjects],
+  );
+  const ownedProjects = profileData.projects ?? [];
   const isOwnProfile = currentUser?.username === profileData.username;
-
-  useEffect(() => {
-    dispatch(fetchProjects());
-  }, [dispatch]);
 
   useEffect(() => {
     if (userId) {
       dispatch(fetchProfileByUsername(userId));
     }
   }, [dispatch, userId]);
+
+  useEffect(() => {
+    if (isOwnProfile) {
+      dispatch(
+        hydrateSavedProjects(savedProjectList.map((project) => project.id)),
+      );
+    }
+  }, [dispatch, isOwnProfile, savedProjectList]);
+
+  const openEditProfile = () => {
+    setProfileForm({
+      name: profileData.name ?? "",
+      title: profileData.title ?? "",
+      bio: profileData.bio ?? "",
+      location: profileData.location ?? "",
+      openTo: (profileData.openTo ?? []).join(", "),
+      headline: profileData.headline ?? "",
+      summary: profileData.summary ?? "",
+      links: serializeLines(
+        profileData.links,
+        (link) =>
+          `${link.label ?? ""} | ${link.value ?? ""} | ${link.iconKey ?? ""}`,
+      ),
+      skills: serializeLines(
+        profileData.skills,
+        (skill) =>
+          `${skill.name ?? ""} | ${skill.evidence ?? ""} | ${skill.level ?? ""}`,
+      ),
+      trustSignals: serializeLines(
+        profileData.trustSignals,
+        (signal) =>
+          `${signal.label ?? ""} | ${signal.detail ?? ""} | ${signal.iconKey ?? ""}`,
+      ),
+    });
+    setIsEditOpen(true);
+  };
 
   if (profileEntry?.status === "loading" && !profileEntry?.profile) {
     return (
@@ -175,6 +304,81 @@ const Profile = () => {
     }
   };
 
+  const handleProfileFieldChange = (field, value) => {
+    setProfileForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+
+    try {
+      await apiRequest("/profiles/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: profileForm.name,
+          title: profileForm.title,
+          bio: profileForm.bio,
+          location: profileForm.location,
+          openTo: profileForm.openTo
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean),
+        }),
+      });
+
+      const updatedProfileResponse = await apiRequest("/profiles/me/proof", {
+        method: "PATCH",
+        body: JSON.stringify({
+          headline: profileForm.headline,
+          summary: profileForm.summary,
+          links: parseProfileLinks(profileForm.links),
+          skills: parseProfileSkills(profileForm.skills),
+          trustSignals: parsePipeLines(
+            profileForm.trustSignals,
+            ([label, detail, iconKey]) =>
+              label && detail
+                ? {
+                    label,
+                    detail,
+                    iconKey: iconKey || "shield",
+                  }
+                : null,
+          ),
+        }),
+      });
+
+      const updatedProfile = mapApiProfileToUi(
+        updatedProfileResponse,
+        profileData.username,
+      );
+
+      dispatch(
+        updateCachedProfile({
+          username: updatedProfile.username,
+          profile: updatedProfile,
+        }),
+      );
+      dispatch(
+        mergeCurrentUser({
+          name: updatedProfile.name,
+          title: updatedProfile.title,
+          bio: updatedProfile.bio,
+          location: updatedProfile.location,
+          openTo: updatedProfile.openTo,
+        }),
+      );
+      setIsEditOpen(false);
+      showAlert("Profile updated.", "success");
+    } catch (error) {
+      showAlert(error.message || "Profile update failed.", "error");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-5 text-slate-900 dark:text-slate-100">
       <section className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
@@ -194,7 +398,11 @@ const Profile = () => {
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingAvatar}
                       className="absolute inset-0 flex items-center justify-center rounded-full bg-slate-950/55 text-white opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:opacity-100 dark:bg-slate-950/65"
-                      aria-label={uploadingAvatar ? "Uploading profile image" : "Change profile image"}
+                      aria-label={
+                        uploadingAvatar
+                          ? "Uploading profile image"
+                          : "Change profile image"
+                      }
                     >
                       {uploadingAvatar ? (
                         <span className="flex items-center gap-1 rounded-full bg-black/35 px-3 py-1 text-xs font-semibold">
@@ -255,6 +463,16 @@ const Profile = () => {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
+              {isOwnProfile ? (
+                <button
+                  type="button"
+                  onClick={openEditProfile}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
+                >
+                  <Pencil size={16} />
+                  Edit profile
+                </button>
+              ) : null}
               {profileData.actions.map((action) => {
                 const Icon = profileIconMap[action.iconKey] || ShieldCheck;
                 return (
@@ -281,11 +499,16 @@ const Profile = () => {
                 return (
                   <a
                     key={link.label}
-                    href="#"
+                    href={normalizeExternalUrl(link.value)}
+                    target="_blank"
+                    rel="noreferrer"
                     className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm transition hover:border-emerald-200 hover:bg-emerald-50 dark:border-slate-800 dark:bg-slate-950 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10"
                   >
                     <span className="flex min-w-0 items-center gap-3">
-                      <Icon className="shrink-0 text-slate-500 dark:text-slate-400" size={18} />
+                      <Icon
+                        className="shrink-0 text-slate-500 dark:text-slate-400"
+                        size={18}
+                      />
                       <span className="min-w-0">
                         <span className="block text-xs text-slate-500 dark:text-slate-400">
                           {link.label}
@@ -295,7 +518,10 @@ const Profile = () => {
                         </span>
                       </span>
                     </span>
-                    <ExternalLink className="shrink-0 text-slate-400" size={16} />
+                    <ExternalLink
+                      className="shrink-0 text-slate-400"
+                      size={16}
+                    />
                   </a>
                 );
               })}
@@ -335,7 +561,10 @@ const Profile = () => {
                     key={stat.label}
                     className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
                   >
-                    <Icon size={18} className="text-slate-500 dark:text-slate-400" />
+                    <Icon
+                      size={18}
+                      className="text-slate-500 dark:text-slate-400"
+                    />
                     <p className="mt-3 text-2xl font-semibold">{stat.value}</p>
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       {stat.label}
@@ -351,9 +580,14 @@ const Profile = () => {
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Trust signals
                   </p>
-                  <h2 className="mt-1 text-lg font-semibold">Ready for opportunity</h2>
+                  <h2 className="mt-1 text-lg font-semibold">
+                    Ready for opportunity
+                  </h2>
                 </div>
-                <ShieldCheck className="text-emerald-600 dark:text-emerald-400" size={22} />
+                <ShieldCheck
+                  className="text-emerald-600 dark:text-emerald-400"
+                  size={22}
+                />
               </div>
               <div className="mt-4 space-y-3">
                 {profileData.trustSignals.map((signal) => {
@@ -386,9 +620,14 @@ const Profile = () => {
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Shipped work
                 </p>
-                <h2 className="mt-1 text-xl font-semibold">Projects with proof</h2>
+                <h2 className="mt-1 text-xl font-semibold">
+                  Projects with proof
+                </h2>
               </div>
-              <Rocket className="text-emerald-600 dark:text-emerald-400" size={22} />
+              <Rocket
+                className="text-emerald-600 dark:text-emerald-400"
+                size={22}
+              />
             </div>
 
             <div className="mt-4 space-y-3">
@@ -407,7 +646,9 @@ const Profile = () => {
                           </span>
                         </div>
                         <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                          {project.solution || project.problem || "Project proof is being assembled from backend records."}
+                          {project.solution ||
+                            project.problem ||
+                            "Project proof is being assembled from backend records."}
                         </p>
                       </div>
                       <span className="shrink-0 rounded-md bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
@@ -432,76 +673,85 @@ const Profile = () => {
                     No shipped projects linked yet.
                   </p>
                   <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                    This panel now reflects backend project ownership instead of local dummy records.
+                    This panel now reflects backend project ownership instead of
+                    local dummy records.
                   </p>
                 </div>
               )}
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Saved projects
-                </p>
-                <h2 className="mt-1 text-xl font-semibold">Build rooms you bookmarked</h2>
+          {isOwnProfile ? (
+            <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Saved projects
+                  </p>
+                  <h2 className="mt-1 text-xl font-semibold">
+                    Build rooms you bookmarked
+                  </h2>
+                </div>
+                <BookmarkCheck
+                  className="text-emerald-600 dark:text-emerald-400"
+                  size={22}
+                />
               </div>
-              <BookmarkCheck className="text-emerald-600 dark:text-emerald-400" size={22} />
-            </div>
 
-            {savedProjectList.length > 0 ? (
-              <div className="mt-4 space-y-3">
-                {savedProjectList.map((project) => (
-                  <article
-                    key={project.id}
-                    className="rounded-lg border border-slate-200 p-4 dark:border-slate-800"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-semibold">{project.title}</h3>
-                          <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-                            {project.progress}% shipped
-                          </span>
+              {savedProjectList.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {savedProjectList.map((project) => (
+                    <article
+                      key={project.id}
+                      className="rounded-lg border border-slate-200 p-4 dark:border-slate-800"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-semibold">{project.title}</h3>
+                            <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+                              {project.progress}% shipped
+                            </span>
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
+                            {project.solution}
+                          </p>
                         </div>
-                        <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">
-                          {project.solution}
-                        </p>
-                      </div>
-                      <Link
-                        to={`/projects/${project.id}`}
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
-                      >
-                        <ExternalLink size={14} />
-                        View
-                      </Link>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {project.techStack.slice(0, 4).map((tech) => (
-                        <span
-                          key={tech}
-                          className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                        <Link
+                          to={`/projects/${project.id}`}
+                          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
                         >
-                          {tech}
-                        </span>
-                      ))}
-                    </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                  No saved build rooms yet.
-                </p>
-                <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
-                  Save interesting projects from the feed and they will show up here for quick access.
-                </p>
-              </div>
-            )}
-          </div>
+                          <ExternalLink size={14} />
+                          View
+                        </Link>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {project.techStack.slice(0, 4).map((tech) => (
+                          <span
+                            key={tech}
+                            className="rounded-md bg-slate-100 px-2.5 py-1 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                          >
+                            {tech}
+                          </span>
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                    No saved build rooms yet.
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
+                    Save interesting projects from the feed and they will show
+                    up here for quick access.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : null}
 
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3">
@@ -509,9 +759,14 @@ const Profile = () => {
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   Skills verified by work
                 </p>
-                <h2 className="mt-1 text-xl font-semibold">Evidence-based skills</h2>
+                <h2 className="mt-1 text-xl font-semibold">
+                  Evidence-based skills
+                </h2>
               </div>
-              <Code2 className="text-emerald-600 dark:text-emerald-400" size={22} />
+              <Code2
+                className="text-emerald-600 dark:text-emerald-400"
+                size={22}
+              />
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {profileData.skills.length > 0 ? (
@@ -552,7 +807,10 @@ const Profile = () => {
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Completed tasks</h2>
-              <CheckCircle2 className="text-emerald-600 dark:text-emerald-400" size={21} />
+              <CheckCircle2
+                className="text-emerald-600 dark:text-emerald-400"
+                size={21}
+              />
             </div>
             <div className="mt-4 space-y-3">
               {profileData.tasks.map((task) => (
@@ -561,7 +819,9 @@ const Profile = () => {
                     className="mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400"
                     size={16}
                   />
-                  <span className="text-slate-700 dark:text-slate-300">{task}</span>
+                  <span className="text-slate-700 dark:text-slate-300">
+                    {task}
+                  </span>
                 </div>
               ))}
             </div>
@@ -570,7 +830,10 @@ const Profile = () => {
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Mentor reviews</h2>
-              <GraduationCap className="text-emerald-600 dark:text-emerald-400" size={21} />
+              <GraduationCap
+                className="text-emerald-600 dark:text-emerald-400"
+                size={21}
+              />
             </div>
             <div className="mt-4 space-y-4">
               {profileData.reviews.map((review) => (
@@ -587,7 +850,9 @@ const Profile = () => {
                     "{review.text}"
                   </p>
                   <p className="mt-3 text-sm font-semibold">{review.mentor}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">{review.role}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {review.role}
+                  </p>
                 </article>
               ))}
             </div>
@@ -596,7 +861,10 @@ const Profile = () => {
           <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold">Contribution timeline</h2>
-              <Clock3 className="text-emerald-600 dark:text-emerald-400" size={21} />
+              <Clock3
+                className="text-emerald-600 dark:text-emerald-400"
+                size={21}
+              />
             </div>
             <div className="mt-4 space-y-4">
               {profileData.timeline.map((item) => (
@@ -623,6 +891,170 @@ const Profile = () => {
         </aside>
       </section>
 
+      {isEditOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
+          <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                  Profile editor
+                </p>
+                <h2 className="mt-1 text-xl font-semibold">
+                  Edit proof profile
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                aria-label="Close profile editor"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-semibold">
+                Name
+                <input
+                  value={profileForm.name}
+                  onChange={(event) =>
+                    handleProfileFieldChange("name", event.target.value)
+                  }
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+              <label className="text-sm font-semibold">
+                Title
+                <input
+                  value={profileForm.title}
+                  onChange={(event) =>
+                    handleProfileFieldChange("title", event.target.value)
+                  }
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+              <label className="text-sm font-semibold">
+                Location
+                <input
+                  value={profileForm.location}
+                  onChange={(event) =>
+                    handleProfileFieldChange("location", event.target.value)
+                  }
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+              <label className="text-sm font-semibold">
+                Open to
+                <input
+                  value={profileForm.openTo}
+                  onChange={(event) =>
+                    handleProfileFieldChange("openTo", event.target.value)
+                  }
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+                <span className="mt-1 block text-xs font-normal text-slate-500 dark:text-slate-400">
+                  Separate items with commas.
+                </span>
+              </label>
+              <label className="text-sm font-semibold sm:col-span-2">
+                Bio
+                <textarea
+                  value={profileForm.bio}
+                  onChange={(event) =>
+                    handleProfileFieldChange("bio", event.target.value)
+                  }
+                  rows={3}
+                  className="mt-1 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+              <label className="text-sm font-semibold sm:col-span-2">
+                Proof headline
+                <input
+                  value={profileForm.headline}
+                  onChange={(event) =>
+                    handleProfileFieldChange("headline", event.target.value)
+                  }
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+              <label className="text-sm font-semibold sm:col-span-2">
+                Proof summary
+                <textarea
+                  value={profileForm.summary}
+                  onChange={(event) =>
+                    handleProfileFieldChange("summary", event.target.value)
+                  }
+                  rows={3}
+                  className="mt-1 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-normal text-slate-900 outline-none transition focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+              <label className="text-sm font-semibold sm:col-span-2">
+                Links
+                <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+                  One URL per line, or Label | URL | icon.
+                </span>
+                <textarea
+                  value={profileForm.links}
+                  onChange={(event) =>
+                    handleProfileFieldChange("links", event.target.value)
+                  }
+                  rows={4}
+                  className="mt-1 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs font-normal text-slate-900 outline-none transition focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+              <label className="text-sm font-semibold sm:col-span-2">
+                Skills
+                <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+                  Separate skills with commas, or use Skill | evidence | level.
+                </span>
+                <textarea
+                  value={profileForm.skills}
+                  onChange={(event) =>
+                    handleProfileFieldChange("skills", event.target.value)
+                  }
+                  rows={4}
+                  className="mt-1 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs font-normal text-slate-900 outline-none transition focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+              <label className="text-sm font-semibold sm:col-span-2">
+                Trust signals
+                <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">
+                  One per line as Label | detail | icon.
+                </span>
+                <textarea
+                  value={profileForm.trustSignals}
+                  onChange={(event) =>
+                    handleProfileFieldChange("trustSignals", event.target.value)
+                  }
+                  rows={4}
+                  className="mt-1 w-full resize-y rounded-md border border-slate-200 bg-white px-3 py-2 font-mono text-xs font-normal text-slate-900 outline-none transition focus:border-emerald-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                />
+              </label>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setIsEditOpen(false)}
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveProfile}
+                disabled={isSavingProfile}
+                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-700/70"
+              >
+                <Pencil size={16} />
+                {isSavingProfile ? "Saving..." : "Save profile"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {activeAction && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 px-4 py-6 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-2xl dark:border-slate-800 dark:bg-slate-900">
@@ -635,7 +1067,9 @@ const Profile = () => {
                   <p className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                     Proof action
                   </p>
-                  <h2 className="mt-1 text-lg font-semibold">{activeAction.label}</h2>
+                  <h2 className="mt-1 text-lg font-semibold">
+                    {activeAction.label}
+                  </h2>
                 </div>
               </div>
               <button
@@ -658,15 +1092,24 @@ const Profile = () => {
               </p>
               <div className="mt-3 space-y-2 text-slate-600 dark:text-slate-300">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
+                  <CheckCircle2
+                    size={15}
+                    className="text-emerald-600 dark:text-emerald-400"
+                  />
                   MeeTogether project evidence
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
+                  <CheckCircle2
+                    size={15}
+                    className="text-emerald-600 dark:text-emerald-400"
+                  />
                   Verified skills and mentor reviews
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 size={15} className="text-emerald-600 dark:text-emerald-400" />
+                  <CheckCircle2
+                    size={15}
+                    className="text-emerald-600 dark:text-emerald-400"
+                  />
                   GitHub and demo links
                 </div>
               </div>

@@ -1,4 +1,8 @@
-import { emptyProfile, emptyProjectCard, profileActionTemplates } from "./uiDefaults";
+import {
+  emptyProfile,
+  emptyProjectCard,
+  profileActionTemplates,
+} from "./uiDefaults";
 
 function getRelativeProjectTime() {
   return "Live";
@@ -10,7 +14,10 @@ function getRelativePostTime(createdAt) {
   }
 
   const created = new Date(createdAt);
-  const diffMinutes = Math.max(1, Math.floor((Date.now() - created.getTime()) / 60000));
+  const diffMinutes = Math.max(
+    1,
+    Math.floor((Date.now() - created.getTime()) / 60000),
+  );
 
   if (diffMinutes < 60) {
     return `${diffMinutes}m ago`;
@@ -97,8 +104,10 @@ export function mapApiProjectToDetail(project, fallbackProject) {
     ...fallbackProject,
     ...project,
     user: {
-      name: project.owner?.name ?? fallbackProject?.user?.name ?? "Unknown builder",
-      username: project.owner?.username ?? fallbackProject?.user?.username ?? "",
+      name:
+        project.owner?.name ?? fallbackProject?.user?.name ?? "Unknown builder",
+      username:
+        project.owner?.username ?? fallbackProject?.user?.username ?? "",
       bio: project.owner?.title ?? fallbackProject?.user?.bio ?? "Builder",
       avatar:
         project.owner?.avatar ??
@@ -114,7 +123,8 @@ export function mapApiProjectToDetail(project, fallbackProject) {
       [],
     techStack: project.techStack ?? fallbackProject?.techStack ?? [],
     openRoles: project.openRoles ?? fallbackProject?.openRoles ?? [],
-    github: project.githubUrl ?? fallbackProject?.github ?? "https://github.com/",
+    github:
+      project.githubUrl ?? fallbackProject?.github ?? "https://github.com/",
     demo: project.demoUrl ?? fallbackProject?.demo ?? "https://example.com/",
     likes: project.likes ?? fallbackProject?.likes ?? 0,
     comments:
@@ -154,10 +164,19 @@ export function mapApiProfileToUi(profileResponse, username) {
     mentorReviews: proof.mentorReviewsCount ?? emptyProfile.mentorReviews,
     openTo: user.openTo?.length ? user.openTo : emptyProfile.openTo,
     links: proof.links?.length ? proof.links : emptyProfile.links,
-    trustSignals: proof.trustSignals?.length ? proof.trustSignals : emptyProfile.trustSignals,
+    trustSignals: proof.trustSignals?.length
+      ? proof.trustSignals
+      : emptyProfile.trustSignals,
     skills: proof.skills?.length ? proof.skills : emptyProfile.skills,
     actions: profileActionTemplates,
     resumeLinks: (proof.links ?? []).map((link) => link.value),
+    projects: (profileResponse?.projects ?? []).map(mapApiProjectToCard),
+    savedProjects: (profileResponse?.savedProjects ?? []).map(
+      mapApiProjectToCard,
+    ),
+    tasks: profileResponse?.tasks ?? emptyProfile.tasks,
+    reviews: profileResponse?.reviews ?? emptyProfile.reviews,
+    timeline: profileResponse?.timeline ?? emptyProfile.timeline,
     stats: [
       {
         label: "Proof Score",
@@ -166,7 +185,9 @@ export function mapApiProfileToUi(profileResponse, username) {
       },
       {
         label: "Shipped Projects",
-        value: String(proof.shippedProjectsCount ?? emptyProfile.shippedProjects),
+        value: String(
+          proof.shippedProjectsCount ?? emptyProfile.shippedProjects,
+        ),
         iconKey: "rocket",
       },
       {

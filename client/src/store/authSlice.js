@@ -14,7 +14,7 @@ export const signUpUser = createAsyncThunk(
       method: "POST",
       body: JSON.stringify(payload),
     });
-  }
+  },
 );
 
 export const signInUser = createAsyncThunk(
@@ -24,7 +24,7 @@ export const signInUser = createAsyncThunk(
       method: "POST",
       body: JSON.stringify(payload),
     });
-  }
+  },
 );
 
 export const restoreSession = createAsyncThunk(
@@ -72,7 +72,7 @@ export const restoreSession = createAsyncThunk(
 
       return null;
     }
-  }
+  },
 );
 
 export const logOutUser = createAsyncThunk(
@@ -98,7 +98,7 @@ export const logOutUser = createAsyncThunk(
     }
 
     return true;
-  }
+  },
 );
 
 const authSlice = createSlice({
@@ -121,6 +121,17 @@ const authSlice = createSlice({
       }
 
       state.currentUser.avatar = action.payload;
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(state.currentUser));
+    },
+    mergeCurrentUser: (state, action) => {
+      if (!state.currentUser) {
+        return;
+      }
+
+      state.currentUser = {
+        ...state.currentUser,
+        ...action.payload,
+      };
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(state.currentUser));
     },
     clearAuthState: (state) => {
@@ -147,7 +158,10 @@ const authSlice = createSlice({
         state.initialized = true;
         state.needsSessionRefresh = false;
         localStorage.setItem(AUTH_TOKEN_KEY, action.payload.accessToken);
-        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(action.payload.user));
+        localStorage.setItem(
+          AUTH_USER_KEY,
+          JSON.stringify(action.payload.user),
+        );
       })
       .addCase(signUpUser.rejected, (state, action) => {
         state.status = "failed";
@@ -164,7 +178,10 @@ const authSlice = createSlice({
         state.initialized = true;
         state.needsSessionRefresh = false;
         localStorage.setItem(AUTH_TOKEN_KEY, action.payload.accessToken);
-        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(action.payload.user));
+        localStorage.setItem(
+          AUTH_USER_KEY,
+          JSON.stringify(action.payload.user),
+        );
       })
       .addCase(signInUser.rejected, (state, action) => {
         state.status = "failed";
@@ -181,13 +198,16 @@ const authSlice = createSlice({
         state.needsSessionRefresh = false;
         if (action.payload?.accessToken && action.payload?.user) {
           localStorage.setItem(AUTH_TOKEN_KEY, action.payload.accessToken);
-          localStorage.setItem(AUTH_USER_KEY, JSON.stringify(action.payload.user));
+          localStorage.setItem(
+            AUTH_USER_KEY,
+            JSON.stringify(action.payload.user),
+          );
         } else {
           localStorage.removeItem(AUTH_TOKEN_KEY);
           localStorage.removeItem(AUTH_USER_KEY);
         }
       })
-      .addCase(restoreSession.rejected, (state, action) => {
+      .addCase(restoreSession.rejected, (state) => {
         state.status = "idle";
         state.currentUser = null;
         state.accessToken = null;
@@ -210,6 +230,10 @@ const authSlice = createSlice({
   },
 });
 
-export const { bootstrapComplete, updateCurrentUserAvatar, clearAuthState } =
-  authSlice.actions;
+export const {
+  bootstrapComplete,
+  updateCurrentUserAvatar,
+  mergeCurrentUser,
+  clearAuthState,
+} = authSlice.actions;
 export default authSlice.reducer;

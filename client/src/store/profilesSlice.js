@@ -57,6 +57,16 @@ const profilesSlice = createSlice({
       entry.status = "succeeded";
       entry.error = null;
     },
+    updateCachedProfile: (state, action) => {
+      const { username, profile } = action.payload;
+
+      state.byUsername[username] = {
+        status: "succeeded",
+        profile,
+        error: null,
+        lastFetchedAt: Date.now(),
+      };
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -89,5 +99,6 @@ const profilesSlice = createSlice({
   },
 });
 
-export const { updateCachedProfileAvatar } = profilesSlice.actions;
+export const { updateCachedProfile, updateCachedProfileAvatar } =
+  profilesSlice.actions;
 export default profilesSlice.reducer;

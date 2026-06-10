@@ -1,17 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { TtlCache } from 'src/common/utils/ttl-cache';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { TtlCache } from "src/common/utils/ttl-cache";
+import { PrismaService } from "src/prisma/prisma.service";
 
 @Injectable()
 export class UsersService {
-  private readonly publicUserCache = new TtlCache<Awaited<ReturnType<UsersService['fetchPublicUserById']>>>(30_000);
+  private readonly publicUserCache = new TtlCache<
+    Awaited<ReturnType<UsersService["fetchPublicUserById"]>>
+  >(30_000);
 
   constructor(private readonly prisma: PrismaService) {}
 
   async findByEmailOrUsername(email: string, username: string) {
     return this.prisma.user.findFirst({
       where: {
-        OR: [{ email: email.toLowerCase() }, { username: username.toLowerCase() }],
+        OR: [
+          { email: email.toLowerCase() },
+          { username: username.toLowerCase() },
+        ],
       },
     });
   }
@@ -36,7 +41,7 @@ export class UsersService {
     const user = await this.fetchPublicUserById(userId);
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException("User not found");
     }
 
     this.publicUserCache.set(userId, user);
@@ -68,6 +73,10 @@ export class UsersService {
     this.publicUserCache.clear(userId);
     this.publicUserCache.set(userId, user);
     return user;
+  }
+
+  clearPublicUserCache(userId: string) {
+    this.publicUserCache.clear(userId);
   }
 
   private fetchPublicUserById(userId: string) {

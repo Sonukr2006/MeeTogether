@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams } from "react-router-dom";
 import {
@@ -16,13 +16,10 @@ import {
 import { emptyProfile } from "../../lib/uiDefaults";
 import PageLoadingState from "../ui/PageLoadingState";
 import { fetchProfileByUsername } from "../../store/profilesSlice";
-import { fetchProjects } from "../../store/projectsSlice";
 
 const Resume = () => {
   const { userId } = useParams();
   const dispatch = useDispatch();
-  const projectCatalog = useSelector((state) => state.projects.items);
-  const projectsStatus = useSelector((state) => state.projects.status);
   const profileEntry = useSelector((state) =>
     userId ? state.profiles.byUsername[userId] : null,
   );
@@ -32,36 +29,37 @@ const Resume = () => {
   };
 
   useEffect(() => {
-    dispatch(fetchProjects());
-  }, [dispatch]);
-
-  useEffect(() => {
     if (userId) {
       dispatch(fetchProfileByUsername(userId));
     }
   }, [dispatch, userId]);
 
-  const ownedProjects = useMemo(
-    () =>
-      projectCatalog.filter(
-        (project) =>
-          project.user.username === profileData.username ||
-          project.user.name === profileData.name,
-      ),
-    [profileData.name, profileData.username, projectCatalog],
-  );
+  const ownedProjects = profileData.projects ?? [];
 
   const resumeHighlights = [
-    { label: "Shipped projects", value: `${profileData.shippedProjects}`, icon: Rocket },
-    { label: "Completed tasks", value: `${profileData.completedTasks}`, icon: CheckCircle2 },
-    { label: "Verified skills", value: `${profileData.verifiedSkills}`, icon: ShieldCheck },
-    { label: "Mentor reviews", value: `${profileData.mentorReviews}`, icon: GraduationCap },
+    {
+      label: "Shipped projects",
+      value: `${profileData.shippedProjects}`,
+      icon: Rocket,
+    },
+    {
+      label: "Completed tasks",
+      value: `${profileData.completedTasks}`,
+      icon: CheckCircle2,
+    },
+    {
+      label: "Verified skills",
+      value: `${profileData.verifiedSkills}`,
+      icon: ShieldCheck,
+    },
+    {
+      label: "Mentor reviews",
+      value: `${profileData.mentorReviews}`,
+      icon: GraduationCap,
+    },
   ];
 
-  if (
-    (profileEntry?.status === "loading" && !profileEntry?.profile) ||
-    (projectsStatus === "loading" && projectCatalog.length === 0)
-  ) {
+  if (profileEntry?.status === "loading" && !profileEntry?.profile) {
     return (
       <PageLoadingState
         className="max-w-5xl"
@@ -133,9 +131,14 @@ const Resume = () => {
                 <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
                   Proof score
                 </p>
-                <p className="mt-2 text-4xl font-semibold">{profileData.proofScore}</p>
+                <p className="mt-2 text-4xl font-semibold">
+                  {profileData.proofScore}
+                </p>
               </div>
-              <Award className="text-emerald-700 dark:text-emerald-300" size={30} />
+              <Award
+                className="text-emerald-700 dark:text-emerald-300"
+                size={30}
+              />
             </div>
             <p className="mt-4 text-sm font-semibold text-emerald-900 dark:text-emerald-100 print:text-slate-900">
               {profileData.builderLevel}
@@ -154,7 +157,10 @@ const Resume = () => {
                 key={item.label}
                 className="rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-950 print:bg-white"
               >
-                <Icon size={18} className="text-emerald-600 dark:text-emerald-400" />
+                <Icon
+                  size={18}
+                  className="text-emerald-600 dark:text-emerald-400"
+                />
                 <p className="mt-3 text-2xl font-semibold">{item.value}</p>
                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 print:text-slate-700">
                   {item.label}
@@ -167,7 +173,10 @@ const Resume = () => {
         <main className="mt-6 grid gap-6 lg:grid-cols-[1.25fr_0.75fr] print:grid-cols-[1.25fr_0.75fr]">
           <section>
             <div className="flex items-center gap-2">
-              <Rocket className="text-emerald-600 dark:text-emerald-400" size={20} />
+              <Rocket
+                className="text-emerald-600 dark:text-emerald-400"
+                size={20}
+              />
               <h3 className="text-lg font-semibold">Shipped Projects</h3>
             </div>
             <div className="mt-3 space-y-3">
@@ -189,7 +198,9 @@ const Resume = () => {
                       </span>
                     </div>
                     <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300 print:text-slate-700">
-                      {project.solution || project.problem || "Project proof is being assembled from backend records."}
+                      {project.solution ||
+                        project.problem ||
+                        "Project proof is being assembled from backend records."}
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {project.techStack.map((tech) => (
@@ -214,7 +225,10 @@ const Resume = () => {
           <aside className="space-y-5">
             <section>
               <div className="flex items-center gap-2">
-                <Code2 className="text-emerald-600 dark:text-emerald-400" size={20} />
+                <Code2
+                  className="text-emerald-600 dark:text-emerald-400"
+                  size={20}
+                />
                 <h3 className="text-lg font-semibold">Verified Skills</h3>
               </div>
               <div className="mt-3 space-y-2">
@@ -240,7 +254,10 @@ const Resume = () => {
 
             <section>
               <div className="flex items-center gap-2">
-                <GraduationCap className="text-emerald-600 dark:text-emerald-400" size={20} />
+                <GraduationCap
+                  className="text-emerald-600 dark:text-emerald-400"
+                  size={20}
+                />
                 <h3 className="text-lg font-semibold">Mentor Reviews</h3>
               </div>
               <div className="mt-3 space-y-3">
@@ -251,14 +268,18 @@ const Resume = () => {
                       className="rounded-lg border border-slate-200 p-3 dark:border-slate-800"
                     >
                       <div className="flex gap-1 text-amber-500">
-                        {Array.from({ length: review.rating }).map((_, index) => (
-                          <Star key={index} size={13} fill="currentColor" />
-                        ))}
+                        {Array.from({ length: review.rating }).map(
+                          (_, index) => (
+                            <Star key={index} size={13} fill="currentColor" />
+                          ),
+                        )}
                       </div>
                       <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300 print:text-slate-700">
                         "{review.text}"
                       </p>
-                      <p className="mt-2 text-sm font-semibold">{review.mentor}</p>
+                      <p className="mt-2 text-sm font-semibold">
+                        {review.mentor}
+                      </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 print:text-slate-700">
                         {review.role}
                       </p>
