@@ -44,6 +44,8 @@ const getRequestItems = (response) => {
 const getNextCursor = (response) =>
   Array.isArray(response) ? null : response?.nextCursor ?? null;
 
+const normalizeRequestType = (type) => type?.toString().toLowerCase();
+
 const Requests = () => {
   const [activeFilter, setActiveFilter] = useState("All");
   const [backendRequests, setBackendRequests] = useState(null);
@@ -113,7 +115,9 @@ const Requests = () => {
       return sourceRequests;
     }
 
-    return sourceRequests.filter((request) => request.type === activeFilter);
+    return sourceRequests.filter(
+      (request) => normalizeRequestType(request.type) === activeFilter.toLowerCase()
+    );
   }, [activeFilter, sourceRequests]);
 
   const handleStatusUpdate = async (id, status) => {
