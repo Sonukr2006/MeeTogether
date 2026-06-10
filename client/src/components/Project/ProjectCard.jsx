@@ -12,8 +12,9 @@ import {
 import {
   openAnalyzePanel,
   setProjectLikedState,
+  setProjectSavedState,
   toggleLiveProjectLike,
-  toggleProjectSave,
+  toggleLiveProjectSave,
 } from "../../store/projectInteractionsSlice";
 import {
   adjustProjectLikeState,
@@ -33,7 +34,7 @@ import CommentModal from "../Post/CommentModal";
 export default function ProjectCard({ project, prioritizeImage = false }) {
   const dispatch = useDispatch();
   const { activeAnalyzeProjectId, likedProjects, savedProjects } = useSelector(
-    (state) => state.projectInteractions
+    (state) => state.projectInteractions,
   );
   const [showAllTags, setShowAllTags] = useState(false);
   const [activeDetailModal, setActiveDetailModal] = useState(null);
@@ -44,9 +45,9 @@ export default function ProjectCard({ project, prioritizeImage = false }) {
   const saved = Boolean(savedProjects[project.id]);
   const showAnalyzePanel = activeAnalyzeProjectId === project.id;
   const likeCount = project.likes ?? 0;
-  const discussionCount = project.comments ?? (
-    Array.isArray(project.discussions) ? project.discussions.length : 0
-  );
+  const discussionCount =
+    project.comments ??
+    (Array.isArray(project.discussions) ? project.discussions.length : 0);
 
   const roomSignals = [
     { label: `${project.progress}% shipped`, icon: Rocket },
@@ -149,63 +150,112 @@ export default function ProjectCard({ project, prioritizeImage = false }) {
         <div className="border-t border-slate-200 pt-3 dark:border-slate-800">
           <div className="flex items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-5 text-sm">
-            <LikeActionButton
-              liked={liked}
-              count={likeCount}
-              label="Like"
-              activeLabel="Liked"
-              onClick={async () => {
-                const nextLiked = !liked;
-                const delta = nextLiked ? 1 : -1;
+              <LikeActionButton
+                liked={liked}
+                count={likeCount}
+                label="Like"
+                activeLabel="Liked"
+                onClick={async () => {
+                  const nextLiked = !liked;
+                  const delta = nextLiked ? 1 : -1;
 
-                dispatch(setProjectLikedState({ projectId: project.id, liked: nextLiked }));
-                dispatch(adjustProjectLikeState({ projectId: project.id, delta }));
-
-                try {
-                  const result = await dispatch(
-                    toggleLiveProjectLike({ projectId: project.id, liked: nextLiked }),
-                  ).unwrap();
                   dispatch(
-                    setProjectLikedState({ projectId: project.id, liked: result.liked }),
+                    setProjectLikedState({
+                      projectId: project.id,
+                      liked: nextLiked,
+                    }),
                   );
-                  if (typeof result.likesCount === "number") {
-                    dispatch(updateProjectLikeState(result));
+                  dispatch(
+                    adjustProjectLikeState({ projectId: project.id, delta }),
+                  );
+
+                  try {
+                    const result = await dispatch(
+                      toggleLiveProjectLike({
+                        projectId: project.id,
+                        liked: nextLiked,
+                      }),
+                    ).unwrap();
+                    dispatch(
+                      setProjectLikedState({
+                        projectId: project.id,
+                        liked: result.liked,
+                      }),
+                    );
+                    if (typeof result.likesCount === "number") {
+                      dispatch(updateProjectLikeState(result));
+                    }
+                  } catch {
+                    dispatch(
+                      setProjectLikedState({ projectId: project.id, liked }),
+                    );
+                    dispatch(
+                      adjustProjectLikeState({
+                        projectId: project.id,
+                        delta: -delta,
+                      }),
+                    );
                   }
-                } catch (error) {
-                  dispatch(setProjectLikedState({ projectId: project.id, liked }));
-                  dispatch(adjustProjectLikeState({ projectId: project.id, delta: -delta }));
+                }}
+              />
+
+              <CommentActionButton
+                count={discussionCount}
+                label="Comments"
+                ariaLabel={`Open project comments${discussionCount ? `, ${discussionCount} discussions` : ""}`}
+                onClick={() => setShowComments((value) => !value)}
+              />
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const nextSaved = !saved;
+                  dispatch(
+                    setProjectSavedState({
+                      projectId: project.id,
+                      saved: nextSaved,
+                    }),
+                  );
+
+                  try {
+                    const result = await dispatch(
+                      toggleLiveProjectSave({
+                        projectId: project.id,
+                        saved: nextSaved,
+                      }),
+                    ).unwrap();
+                    dispatch(
+                      setProjectSavedState({
+                        projectId: project.id,
+                        saved: result.saved,
+                      }),
+                    );
+                  } catch {
+                    dispatch(
+                      setProjectSavedState({ projectId: project.id, saved }),
+                    );
+                  }
+                }}
+                className={`inline-flex items-center justify-center transition hover:text-emerald-600 dark:hover:text-emerald-400 ${
+                  saved
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-slate-500 dark:text-slate-400"
+                }`}
+                aria-label={saved ? "Saved project" : "Save project"}
+              >
+                <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => dispatch(openAnalyzePanel(project.id))}
+                className="inline-flex items-center justify-center text-slate-500 transition hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
+                aria-label={
+                  showAnalyzePanel ? "Analyzed project" : "Analyze project"
                 }
-              }}
-            />
-
-            <CommentActionButton
-              count={discussionCount}
-              label="Comments"
-              ariaLabel={`Open project comments${discussionCount ? `, ${discussionCount} discussions` : ""}`}
-              onClick={() => setShowComments((value) => !value)}
-            />
-
-            <button
-              type="button"
-              onClick={() => dispatch(toggleProjectSave(project.id))}
-              className={`inline-flex items-center justify-center transition hover:text-emerald-600 dark:hover:text-emerald-400 ${
-                saved
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : "text-slate-500 dark:text-slate-400"
-              }`}
-              aria-label={saved ? "Saved project" : "Save project"}
-            >
-              <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => dispatch(openAnalyzePanel(project.id))}
-              className="inline-flex items-center justify-center text-slate-500 transition hover:text-emerald-600 dark:text-slate-400 dark:hover:text-emerald-400"
-              aria-label={showAnalyzePanel ? "Analyzed project" : "Analyze project"}
-            >
-              <Sparkles size={16} />
-            </button>
+              >
+                <Sparkles size={16} />
+              </button>
             </div>
 
             <div className="flex gap-2">
@@ -241,7 +291,6 @@ export default function ProjectCard({ project, prioritizeImage = false }) {
           ) : null}
         </div>
       </div>
-
     </div>
   );
 }

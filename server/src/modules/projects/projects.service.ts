@@ -1,9 +1,9 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
-import { TtlCache } from 'src/common/utils/ttl-cache';
-import { LikesService } from '../likes/likes.service';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { CreateProjectDto } from './dto/create-project.dto';
+import { Injectable, Logger, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { TtlCache } from "src/common/utils/ttl-cache";
+import { LikesService } from "../likes/likes.service";
+import { PrismaService } from "src/prisma/prisma.service";
+import { CreateProjectDto } from "./dto/create-project.dto";
 
 const projectInclude = {
   owner: {
@@ -27,22 +27,22 @@ const projectInclude = {
       },
     },
     orderBy: {
-      joinedAt: 'asc' as const,
+      joinedAt: "asc" as const,
     },
   },
   techTags: {
     orderBy: {
-      sortOrder: 'asc' as const,
+      sortOrder: "asc" as const,
     },
   },
   openRoles: {
     orderBy: {
-      sortOrder: 'asc' as const,
+      sortOrder: "asc" as const,
     },
   },
   tags: {
     orderBy: {
-      sortOrder: 'asc' as const,
+      sortOrder: "asc" as const,
     },
   },
 } as const;
@@ -69,10 +69,14 @@ type ProjectCommentWithAuthor = Prisma.ProjectCommentGetPayload<{
 
 @Injectable()
 export class ProjectsService {
-  private readonly projectsListCache = new TtlCache<ReturnType<ProjectsService['toProjectSummary']>[]>(30_000);
-  private readonly projectDetailCache = new TtlCache<ReturnType<ProjectsService['toProjectDetail']>>(30_000);
+  private readonly projectsListCache = new TtlCache<
+    ReturnType<ProjectsService["toProjectSummary"]>[]
+  >(30_000);
+  private readonly projectDetailCache = new TtlCache<
+    ReturnType<ProjectsService["toProjectDetail"]>
+  >(30_000);
   private readonly projectCommentsCache = new TtlCache<
-    ReturnType<ProjectsService['toProjectComment']>[]
+    ReturnType<ProjectsService["toProjectComment"]>[]
   >(30_000);
   private readonly logger = new Logger(ProjectsService.name);
   private isProcessingQueue = false;
@@ -83,7 +87,7 @@ export class ProjectsService {
   ) {}
 
   async getProjects() {
-    const cached = this.projectsListCache.get('all');
+    const cached = this.projectsListCache.get("all");
     if (cached) {
       return cached;
     }
@@ -101,15 +105,17 @@ export class ProjectsService {
         },
       },
       orderBy: {
-        createdAt: 'desc',
+        createdAt: "desc",
       },
     });
 
     const summaries = projects.map((project) =>
-      this.toProjectSummary(project as ProjectWithRelations & { _count: { members: number } }),
+      this.toProjectSummary(
+        project as ProjectWithRelations & { _count: { members: number } },
+      ),
     );
 
-    this.projectsListCache.set('all', summaries);
+    this.projectsListCache.set("all", summaries);
     return summaries;
   }
 
@@ -126,7 +132,7 @@ export class ProjectsService {
           solution: createProjectDto.solutionApproach.trim(),
           image: createProjectDto.imageUrl?.trim() || null,
           progress: 0,
-          visibility: createProjectDto.visibility ?? 'public',
+          visibility: createProjectDto.visibility ?? "public",
           difficulty: createProjectDto.difficulty?.trim() || null,
           timeline: createProjectDto.timeline?.trim() || null,
           mentorStatus: createProjectDto.mentorStatus?.trim() || null,
@@ -139,7 +145,7 @@ export class ProjectsService {
         data: {
           projectId: project.id,
           userId,
-          roleLabel: 'Owner',
+          roleLabel: "Owner",
         },
       });
 
@@ -167,7 +173,7 @@ export class ProjectsService {
         data: {
           projectId: project.id,
           title: `${project.title} discussion`,
-          kind: 'default',
+          kind: "default",
           createdByUserId: userId,
         },
       });
@@ -199,7 +205,9 @@ export class ProjectsService {
         title: project.title,
         defaultThreadId: defaultThread.id,
         project: this.toProjectSummary(
-          createdProject as ProjectWithRelations & { _count: { members: number } },
+          createdProject as ProjectWithRelations & {
+            _count: { members: number };
+          },
         ),
       };
     });
@@ -222,7 +230,7 @@ export class ProjectsService {
     });
 
     if (!project) {
-      throw new NotFoundException('Project not found');
+      throw new NotFoundException("Project not found");
     }
 
     const detail = this.toProjectDetail(project);
@@ -242,13 +250,13 @@ export class ProjectsService {
     });
 
     if (!project) {
-      throw new NotFoundException('Project not found');
+      throw new NotFoundException("Project not found");
     }
 
     const comments = await this.prisma.projectComment.findMany({
       where: { projectId },
       include: projectCommentInclude,
-      orderBy: [{ createdAt: 'asc' }],
+      orderBy: [{ createdAt: "asc" }],
     });
 
     const mapped = comments.map((comment) => this.toProjectComment(comment));
@@ -264,7 +272,7 @@ export class ProjectsService {
       });
 
       if (!project) {
-        throw new NotFoundException('Project not found');
+        throw new NotFoundException("Project not found");
       }
 
       const comment = await tx.projectComment.create({
@@ -310,7 +318,7 @@ export class ProjectsService {
     }
 
     await this.likesService.enqueue({
-      entityType: 'project',
+      entityType: "project",
       entityId: projectId,
       userId,
       liked,
@@ -333,7 +341,7 @@ export class ProjectsService {
       });
 
       if (!project) {
-        throw new NotFoundException('Project not found');
+        throw new NotFoundException("Project not found");
       }
 
       const existing = await tx.projectLike.findUnique({
@@ -426,6 +434,54 @@ export class ProjectsService {
     };
   }
 
+  async setSaveState(projectId: string, userId: string, saved: boolean) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const project = await tx.project.findUnique({
+        where: { id: projectId },
+        select: { id: true },
+      });
+
+      if (!project) {
+        throw new NotFoundException("Project not found");
+      }
+
+      const existing = await tx.projectSave.findUnique({
+        where: {
+          projectId_userId: {
+            projectId,
+            userId,
+          },
+        },
+      });
+
+      if (existing && !saved) {
+        await tx.projectSave.delete({
+          where: { id: existing.id },
+        });
+
+        return false;
+      }
+
+      if (!existing && saved) {
+        await tx.projectSave.create({
+          data: {
+            projectId,
+            userId,
+          },
+        });
+
+        return true;
+      }
+
+      return Boolean(existing);
+    });
+
+    return {
+      projectId,
+      saved: result,
+    };
+  }
+
   private async processQueuedLikes() {
     if (this.isProcessingQueue) {
       return;
@@ -435,16 +491,22 @@ export class ProjectsService {
 
     try {
       for (let index = 0; index < 20; index += 1) {
-        const intent = await this.likesService.popIntent('project');
+        const intent = await this.likesService.popIntent("project");
         if (!intent) {
           break;
         }
 
         try {
-          await this.applyLikeState(intent.entityId, intent.userId, intent.liked);
+          await this.applyLikeState(
+            intent.entityId,
+            intent.userId,
+            intent.liked,
+          );
         } catch (error) {
           if (error instanceof NotFoundException) {
-            this.logger.warn(`Skipping queued project like for missing project ${intent.entityId}`);
+            this.logger.warn(
+              `Skipping queued project like for missing project ${intent.entityId}`,
+            );
             continue;
           }
 
@@ -452,14 +514,17 @@ export class ProjectsService {
         }
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'unknown queue failure';
+      const message =
+        error instanceof Error ? error.message : "unknown queue failure";
       this.logger.warn(`Project likes queue processing failed: ${message}`);
     } finally {
       this.isProcessingQueue = false;
     }
   }
 
-  private toProjectSummary(project: ProjectWithRelations & { _count?: { members: number } }) {
+  private toProjectSummary(
+    project: ProjectWithRelations & { _count?: { members: number } },
+  ) {
     return {
       id: project.id,
       createdAt: project.createdAt,
@@ -477,9 +542,15 @@ export class ProjectsService {
       comments: project.commentsCount,
       owner: project.owner,
       contributorsCount: project._count?.members ?? project.members.length,
-      techStack: project.techTags.map((tag: ProjectWithRelations['techTags'][number]) => tag.value),
-      openRoles: project.openRoles.map((role: ProjectWithRelations['openRoles'][number]) => role.value),
-      tags: project.tags.map((tag: ProjectWithRelations['tags'][number]) => tag.value),
+      techStack: project.techTags.map(
+        (tag: ProjectWithRelations["techTags"][number]) => tag.value,
+      ),
+      openRoles: project.openRoles.map(
+        (role: ProjectWithRelations["openRoles"][number]) => role.value,
+      ),
+      tags: project.tags.map(
+        (tag: ProjectWithRelations["tags"][number]) => tag.value,
+      ),
     };
   }
 
@@ -500,17 +571,25 @@ export class ProjectsService {
       likes: project.likesCount,
       comments: project.commentsCount,
       owner: project.owner,
-      members: project.members.map((member: ProjectWithRelations['members'][number]) => ({
-        id: member.user.id,
-        name: member.user.name,
-        username: member.user.username,
-        avatar: member.user.avatar,
-        roleLabel: member.roleLabel,
-        joinedAt: member.joinedAt,
-      })),
-      techStack: project.techTags.map((tag: ProjectWithRelations['techTags'][number]) => tag.value),
-      openRoles: project.openRoles.map((role: ProjectWithRelations['openRoles'][number]) => role.value),
-      tags: project.tags.map((tag: ProjectWithRelations['tags'][number]) => tag.value),
+      members: project.members.map(
+        (member: ProjectWithRelations["members"][number]) => ({
+          id: member.user.id,
+          name: member.user.name,
+          username: member.user.username,
+          avatar: member.user.avatar,
+          roleLabel: member.roleLabel,
+          joinedAt: member.joinedAt,
+        }),
+      ),
+      techStack: project.techTags.map(
+        (tag: ProjectWithRelations["techTags"][number]) => tag.value,
+      ),
+      openRoles: project.openRoles.map(
+        (role: ProjectWithRelations["openRoles"][number]) => role.value,
+      ),
+      tags: project.tags.map(
+        (tag: ProjectWithRelations["tags"][number]) => tag.value,
+      ),
       createdAt: project.createdAt,
       updatedAt: project.updatedAt,
     };
@@ -527,7 +606,7 @@ export class ProjectsService {
         name: comment.author.name,
         username: comment.author.username,
         avatar: comment.author.avatar,
-        title: comment.author.title ?? 'Builder',
+        title: comment.author.title ?? "Builder",
       },
     };
   }

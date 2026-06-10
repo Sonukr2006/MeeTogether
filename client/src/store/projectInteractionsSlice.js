@@ -18,6 +18,16 @@ export const toggleLiveProjectLike = createAsyncThunk(
   },
 );
 
+export const toggleLiveProjectSave = createAsyncThunk(
+  "projectInteractions/toggleLiveProjectSave",
+  async ({ projectId, saved }) => {
+    return apiRequest(`/projects/${projectId}/save`, {
+      method: "POST",
+      body: JSON.stringify({ saved }),
+    });
+  },
+);
+
 const initialState = {
   activeAnalyzeProjectId: null,
   likedProjects: initialLikedProjects,
@@ -50,11 +60,24 @@ const projectInteractionsSlice = createSlice({
       const projectId = action.payload;
       state.savedProjects[projectId] = !state.savedProjects[projectId];
     },
+    setProjectSavedState: (state, action) => {
+      const { projectId, saved } = action.payload;
+      state.savedProjects[projectId] = saved;
+    },
+    hydrateSavedProjects: (state, action) => {
+      state.savedProjects = {};
+      action.payload.forEach((projectId) => {
+        state.savedProjects[projectId] = true;
+      });
+    },
   },
   extraReducers: (builder) => {
     builder.addCase(toggleLiveProjectLike.fulfilled, (state, action) => {
       state.likedProjects[action.payload.projectId] = action.payload.liked;
       persistLikedProjects(state.likedProjects);
+    });
+    builder.addCase(toggleLiveProjectSave.fulfilled, (state, action) => {
+      state.savedProjects[action.payload.projectId] = action.payload.saved;
     });
   },
 });
@@ -63,6 +86,8 @@ export const {
   closeAnalyzePanel,
   openAnalyzePanel,
   setProjectLikedState,
+  setProjectSavedState,
+  hydrateSavedProjects,
   toggleProjectSave,
 } = projectInteractionsSlice.actions;
 
