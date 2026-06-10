@@ -1,24 +1,23 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { RequestStatusValue } from './dto/update-request-status.dto';
 
 @Injectable()
 export class RequestsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getRequests(username?: string) {
+  async getInboxForUser(userId: string) {
     const requests = await this.prisma.request.findMany({
-      where: username
-        ? {
-            toUser: {
-              username: username.toLowerCase(),
-            },
-          }
-        : undefined,
+      where: {
+        toUserId: userId,
+      },
       include: {
         fromUser: {
           select: {
             id: true,
             name: true,
+            username: true,
+            avatar: true,
             title: true,
           },
         },
@@ -28,11 +27,87 @@ export class RequestsService {
       },
     });
 
-    return requests.map((request) => ({
+    return requests.map((request) => this.toRequestInboxItem(request));
+  }
+
+  async updateStatusForRecipient(
+    requestId: string,
+    recipientUserId: string,
+    status: RequestStatusValue,
+  ) {
+    const updated = await this.prisma.request.updateMany({
+      where: {
+        id: requestId,
+        toUserId: recipientUserId,
+      },
+      data: {
+        status,
+        unread: false,
+      },
+    });
+
+    if (updated.count !== 1) {
+      throw new NotFoundException('Request not found');
+    }
+
+    const request = await this.prisma.request.findUniqueOrThrow({
+      where: {
+        id: requestId,
+      },
+      include: {
+        fromUser: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+            avatar: true,
+            title: true,
+          },
+        },
+      },
+    });
+
+    return this.toRequestInboxItem(request);
+  }
+
+  async markAllReadForRecipient(recipientUserId: string) {
+    await this.prisma.request.updateMany({
+      where: {
+        toUserId: recipientUserId,
+        unread: true,
+      },
+      data: {
+        unread: false,
+      },
+    });
+
+    return this.getInboxForUser(recipientUserId);
+  }
+
+  private toRequestInboxItem(request: {
+    id: string;
+    type: string;
+    title: string;
+    status: string;
+    unread: boolean;
+    message: string | null;
+    relatedProjectId: string | null;
+    relatedThreadId: string | null;
+    createdAt: Date;
+    fromUser: {
+      id: string;
+      name: string;
+      username: string;
+      avatar: string | null;
+      title: string | null;
+    };
+  }) {
+    return {
       id: request.id,
       type: request.type,
       title: request.title,
       from: request.fromUser.name,
+      fromUser: request.fromUser,
       role: request.fromUser.title ?? 'Builder',
       time: this.getRelativeTime(request.createdAt),
       status: request.status,
@@ -42,7 +117,7 @@ export class RequestsService {
       relatedThreadId: request.relatedThreadId,
       iconKey: this.getIconKey(request.type),
       proof: this.getProofHints(request.type),
-    }));
+    };
   }
 
   private getIconKey(type: string) {

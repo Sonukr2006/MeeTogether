@@ -35,6 +35,7 @@ const Requests = () => {
   const [activeFilter, setActiveFilter] = useState("All");
   const [backendRequests, setBackendRequests] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [statusError, setStatusError] = useState("");
   const dispatch = useDispatch();
   const currentUser = useSelector((state) => state.auth.currentUser);
   const profileHandle = currentUser?.username ?? "builder";
@@ -65,12 +66,11 @@ const Requests = () => {
       setIsLoading(true);
 
       try {
-        const data = await apiRequest(
-          `/requests?username=${encodeURIComponent(currentUser.username)}`
-        );
+        const data = await apiRequest("/requests");
 
         if (!ignore && Array.isArray(data)) {
           setBackendRequests(data);
+          setStatusError("");
         }
       } catch {
         if (!ignore) {
@@ -98,8 +98,51 @@ const Requests = () => {
     return sourceRequests.filter((request) => request.type === activeFilter);
   }, [activeFilter, sourceRequests]);
 
-  const handleStatusUpdate = (id, status) => {
-    dispatch(updateRequestStatus({ id, status }));
+  const handleStatusUpdate = async (id, status) => {
+    if (backendRequests === null) {
+      dispatch(updateRequestStatus({ id, status }));
+      return;
+    }
+
+    setStatusError("");
+
+    try {
+      const updatedRequest = await apiRequest(`/requests/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+
+      setBackendRequests((current) =>
+        Array.isArray(current)
+          ? current.map((request) =>
+              request.id === id ? updatedRequest : request
+            )
+          : current
+      );
+    } catch (error) {
+      setStatusError(error.message || "Request update failed.");
+    }
+  };
+
+  const handleMarkAllRead = async () => {
+    if (backendRequests === null) {
+      dispatch(markAllRequestsRead());
+      return;
+    }
+
+    setStatusError("");
+
+    try {
+      const updatedRequests = await apiRequest("/requests/read-all", {
+        method: "PATCH",
+      });
+
+      if (Array.isArray(updatedRequests)) {
+        setBackendRequests(updatedRequests);
+      }
+    } catch (error) {
+      setStatusError(error.message || "Failed to mark requests read.");
+    }
   };
 
   if (isLoading && backendRequests === null) {
@@ -133,7 +176,7 @@ const Requests = () => {
             </div>
             <button
               type="button"
-              onClick={() => dispatch(markAllRequestsRead())}
+              onClick={handleMarkAllRead}
               className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
             >
               Mark all read
@@ -174,6 +217,12 @@ const Requests = () => {
           </button>
         ))}
       </div>
+
+      {statusError ? (
+        <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-200">
+          {statusError}
+        </p>
+      ) : null}
 
       <section className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <div className="space-y-4">

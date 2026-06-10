@@ -36,7 +36,7 @@ These must be fixed before a real public launch.
 | --- | --- |
 | `Partial` | Remove `server/.env` from git tracking and rotate any secrets that may have been committed. Repo-side untracking is done; external credential rotation is still required. |
 | `Partial` | Sanitize `server/.env.example`; it must contain placeholders only. Placeholder cleanup is done; rotate any real database credential that may have been exposed there. |
-| `Not started` | Add auth and recipient authorization to the requests inbox. Requests must only be readable by sender or recipient. |
+| `Partial` | Add auth and recipient authorization to the requests inbox. Received inbox reads, recipient status updates, and mark-all-read are now authenticated and scoped to the current user; sent-request reads, create/cancel flows, pagination, and tests are still required. |
 | `Partial` | Require authenticated access for discussion messages according to the visibility model. Message writes require auth, but message reads are still public. |
 | `Not started` | Enforce project membership or explicit participant access before posting discussion messages. |
 | `Not started` | Align public discovery routes with the product visibility model. Feed, public projects, public profiles, and public resumes should not all be forced behind verified login if they are acquisition surfaces. |
@@ -64,7 +64,7 @@ These must be fixed before a real public launch.
 | Posts/feed | `Partial` | Create/read/like/comment exist, but feed pagination, edit/delete policy, moderation, and URL safety need hardening. |
 | Discussions | `Partial` | Thread/message APIs exist, but read auth, membership checks, pagination, and concurrency safety are missing. |
 | Issues | `Partial` | Read API exists, but create/update/assign workflows and permissions are missing. |
-| Requests | `Not started` | Current read API is not production-safe because it is public and username-query based. |
+| Requests | `Partial` | Received inbox reads, recipient status updates, and mark-all-read are authenticated and user-scoped, but create/cancel APIs, sent-request visibility, pagination, spam limits, and tests are missing. |
 | Profiles/proof resume | `Partial` | Profile read/update exists, but public/private response tests, pagination, proof-source rules, and resume backend contract need work. |
 | Media storage | `Partial` | Upload-target flow exists, but ownership validation, storage-level size enforcement, and final provider decision are missing. |
 | Database scalability | `Partial` | Prisma schema has useful relations and some indexes, but pagination and several hot-path indexes are missing. |
@@ -95,7 +95,7 @@ These must be fixed before a real public launch.
 - [ ] `Partial` Ensure public can read only feed, public projects, and public proof profiles.
 - [ ] `Not started` Split frontend routes into public discovery routes and authenticated collaboration routes. Public product surfaces should not depend on `RequireAuth` unless the launch policy changes.
 - [ ] `Partial` Ensure saved projects are private to the owner unless explicitly made public later.
-- [ ] `Not started` Ensure requests are private to sender/recipient.
+- [ ] `Partial` Ensure requests are private to sender/recipient. Received inbox reads, recipient status updates, and mark-all-read are current-user scoped; sent-request reads and create/cancel flows still need explicit authorization.
 - [ ] `Not started` Ensure issues follow project visibility and write permissions.
 - [ ] `Not started` Ensure deployments follow project visibility and restrict write access to owner/admin/service identity.
 - [ ] `Not started` Add permission matrix tests from `authorization-rules.md`.
@@ -142,12 +142,12 @@ These must be fixed before a real public launch.
 
 ### Requests
 
-- [ ] `Not started` Add authenticated `GET /requests` for current user's inbox.
+- [ ] `Partial` Add authenticated `GET /requests` for current user's inbox. Backend and frontend now use the current authenticated user; pagination and tests are still missing.
 - [ ] `Not started` Add create request API.
-- [ ] `Not started` Add update request status API.
+- [ ] `Partial` Add update request status API. Recipients can now update received request status; transition policy and tests are still missing.
 - [ ] `Not started` Add cancel sent request API.
 - [ ] `Not started` Enforce sender/recipient authorization.
-- [ ] `Not started` Replace frontend local-only request status updates with backend persistence.
+- [ ] `Partial` Replace frontend local-only request status and read-state updates with backend persistence. Backend-loaded requests now persist status and mark-all-read changes; local profile-action placeholders remain until real request creation exists.
 - [ ] `Not started` Replace frontend profile-action request placeholders with real request creation.
 - [ ] `Not started` Add request spam rate limits.
 - [ ] `Not started` Add pagination and unread filters.
@@ -222,8 +222,8 @@ This section names current code areas that need hardening before production.
 
 ### Authorization
 
-- `server/src/modules/requests/requests.controller.ts` exposes requests without auth.
-- `server/src/modules/requests/requests.service.ts` returns private request data based on a query username.
+- `server/src/modules/requests/requests.controller.ts` now guards received inbox reads, recipient status updates, and mark-all-read, but request create/cancel endpoints are still missing.
+- `server/src/modules/requests/requests.service.ts` now scopes received inbox reads to the authenticated user, but still needs pagination and tests.
 - `server/src/modules/discussions/discussions.controller.ts` exposes thread messages without auth.
 - `server/src/modules/discussions/discussions.service.ts` allows any verified user to post to any existing thread.
 - `server/src/modules/issues/issues.controller.ts` exposes issues without auth even though docs define issue reads as authenticated by default.
