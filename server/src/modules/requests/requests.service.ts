@@ -1,6 +1,8 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
+  HttpStatus,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -13,6 +15,11 @@ import { RequestStatusValue } from './dto/update-request-status.dto';
 const ACTIVE_REQUEST_STATUSES = ['Pending', 'Replying'] as const;
 const DEFAULT_REQUEST_PAGE_SIZE = 30;
 const MAX_REQUEST_PAGE_SIZE = 50;
+const REQUEST_CREATE_LIMITS = {
+  perSenderPerHour: 20,
+  perRecipientPerDay: 5,
+  activeOutgoing: 50,
+} as const;
 
 type NormalizedCreateRequestInput = {
   toUserId: string | null;
@@ -115,6 +122,7 @@ export class RequestsService {
       recipient.id,
       requestInput,
     );
+    await this.enforceCreateRateLimits(senderUserId, recipient.id);
 
     try {
       const request = await this.prisma.request.create({
@@ -451,6 +459,73 @@ export class RequestsService {
     if (existingRequest) {
       throw new ConflictException('An active request already exists for this recipient.');
     }
+  }
+
+  private async enforceCreateRateLimits(
+    senderUserId: string,
+    recipientUserId: string,
+  ) {
+    const now = Date.now();
+    const oneHourAgo = new Date(now - 60 * 60 * 1000);
+    const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+
+    const [recentSenderRequests, recentRecipientRequests, activeOutgoingRequests] =
+      await this.prisma.$transaction([
+        this.prisma.request.count({
+          where: {
+            fromUserId: senderUserId,
+            createdAt: {
+              gte: oneHourAgo,
+            },
+          },
+        }),
+        this.prisma.request.count({
+          where: {
+            fromUserId: senderUserId,
+            toUserId: recipientUserId,
+            createdAt: {
+              gte: oneDayAgo,
+            },
+          },
+        }),
+        this.prisma.request.count({
+          where: {
+            fromUserId: senderUserId,
+            status: {
+              in: [...ACTIVE_REQUEST_STATUSES],
+            },
+          },
+        }),
+      ]);
+
+    if (recentSenderRequests >= REQUEST_CREATE_LIMITS.perSenderPerHour) {
+      this.throwRequestRateLimit(
+        'Too many request creations. Please try again later.',
+      );
+    }
+
+    if (recentRecipientRequests >= REQUEST_CREATE_LIMITS.perRecipientPerDay) {
+      this.throwRequestRateLimit(
+        'Too many requests to this recipient. Please wait before sending another.',
+      );
+    }
+
+    if (activeOutgoingRequests >= REQUEST_CREATE_LIMITS.activeOutgoing) {
+      this.throwRequestRateLimit(
+        'Too many active outgoing requests. Resolve or cancel some requests before sending more.',
+      );
+    }
+  }
+
+  private throwRequestRateLimit(message: string): never {
+    throw new HttpException(
+      {
+        statusCode: HttpStatus.TOO_MANY_REQUESTS,
+        message,
+        error: 'Too Many Requests',
+      },
+      HttpStatus.TOO_MANY_REQUESTS,
+    );
   }
 
   private async throwSentRequestUpdateFailure(
