@@ -31,10 +31,25 @@ const requestIcons = {
   resume: Download,
 };
 
+const REQUEST_PAGE_SIZE = 30;
+
+const getRequestItems = (response) => {
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  return Array.isArray(response?.items) ? response.items : [];
+};
+
+const getNextCursor = (response) =>
+  Array.isArray(response) ? null : response?.nextCursor ?? null;
+
 const Requests = () => {
   const [activeFilter, setActiveFilter] = useState("All");
   const [backendRequests, setBackendRequests] = useState(null);
+  const [nextCursor, setNextCursor] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [statusError, setStatusError] = useState("");
   const dispatch = useDispatch();
   const currentUser = useSelector((state) => state.auth.currentUser);
@@ -60,21 +75,24 @@ const Requests = () => {
     const loadRequests = async () => {
       if (!currentUser?.username) {
         setBackendRequests(null);
+        setNextCursor(null);
         return;
       }
 
       setIsLoading(true);
 
       try {
-        const data = await apiRequest("/requests");
+        const data = await apiRequest(`/requests?limit=${REQUEST_PAGE_SIZE}`);
 
-        if (!ignore && Array.isArray(data)) {
-          setBackendRequests(data);
+        if (!ignore) {
+          setBackendRequests(getRequestItems(data));
+          setNextCursor(getNextCursor(data));
           setStatusError("");
         }
       } catch {
         if (!ignore) {
           setBackendRequests(null);
+          setNextCursor(null);
         }
       } finally {
         if (!ignore) {
@@ -137,11 +155,35 @@ const Requests = () => {
         method: "PATCH",
       });
 
-      if (Array.isArray(updatedRequests)) {
-        setBackendRequests(updatedRequests);
-      }
+      setBackendRequests(getRequestItems(updatedRequests));
+      setNextCursor(getNextCursor(updatedRequests));
     } catch (error) {
       setStatusError(error.message || "Failed to mark requests read.");
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (!nextCursor || backendRequests === null) {
+      return;
+    }
+
+    setStatusError("");
+    setIsLoadingMore(true);
+
+    try {
+      const data = await apiRequest(
+        `/requests?limit=${REQUEST_PAGE_SIZE}&cursor=${encodeURIComponent(nextCursor)}`
+      );
+      const items = getRequestItems(data);
+
+      setBackendRequests((current) =>
+        Array.isArray(current) ? [...current, ...items] : items
+      );
+      setNextCursor(getNextCursor(data));
+    } catch (error) {
+      setStatusError(error.message || "Failed to load more requests.");
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -298,6 +340,19 @@ const Requests = () => {
               </article>
             );
           })}
+
+          {nextCursor ? (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={isLoadingMore}
+                className="inline-flex min-h-10 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                {isLoadingMore ? "Loading..." : "Load more"}
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <aside className="space-y-4">

@@ -7,9 +7,12 @@ import {
 import { Prisma } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateRequestDto } from './dto/create-request.dto';
+import { ListRequestsQueryDto } from './dto/list-requests-query.dto';
 import { RequestStatusValue } from './dto/update-request-status.dto';
 
 const ACTIVE_REQUEST_STATUSES = ['Pending', 'Replying'] as const;
+const DEFAULT_REQUEST_PAGE_SIZE = 30;
+const MAX_REQUEST_PAGE_SIZE = 50;
 
 type NormalizedCreateRequestInput = {
   toUserId: string | null;
@@ -21,15 +24,27 @@ type NormalizedCreateRequestInput = {
   relatedThreadId: string | null;
 };
 
+type NormalizedListRequestsQuery = {
+  limit: number;
+  cursor: string | null;
+  unread: boolean | null;
+};
+
 @Injectable()
 export class RequestsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getInboxForUser(userId: string) {
-    const requests = await this.prisma.request.findMany({
-      where: {
+  async getInboxForUser(userId: string, query: ListRequestsQueryDto = {}) {
+    const pageQuery = this.normalizeListQuery(query);
+    const where = await this.buildCursorWhere(
+      {
         toUserId: userId,
+        ...(pageQuery.unread === null ? {} : { unread: pageQuery.unread }),
       },
+      pageQuery.cursor,
+    );
+    const requests = await this.prisma.request.findMany({
+      where,
       include: {
         fromUser: {
           select: {
@@ -41,19 +56,28 @@ export class RequestsService {
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: pageQuery.limit + 1,
     });
 
-    return requests.map((request) => this.toRequestInboxItem(request));
+    return this.toRequestPage(
+      requests,
+      pageQuery.limit,
+      (request) => this.toRequestInboxItem(request),
+    );
   }
 
-  async getSentForUser(userId: string) {
-    const requests = await this.prisma.request.findMany({
-      where: {
+  async getSentForUser(userId: string, query: ListRequestsQueryDto = {}) {
+    const pageQuery = this.normalizeListQuery(query);
+    const where = await this.buildCursorWhere(
+      {
         fromUserId: userId,
+        ...(pageQuery.unread === null ? {} : { unread: pageQuery.unread }),
       },
+      pageQuery.cursor,
+    );
+    const requests = await this.prisma.request.findMany({
+      where,
       include: {
         toUser: {
           select: {
@@ -65,12 +89,15 @@ export class RequestsService {
           },
         },
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: pageQuery.limit + 1,
     });
 
-    return requests.map((request) => this.toSentRequestItem(request));
+    return this.toRequestPage(
+      requests,
+      pageQuery.limit,
+      (request) => this.toSentRequestItem(request),
+    );
   }
 
   async createRequest(senderUserId: string, createRequestDto: CreateRequestDto) {
@@ -239,6 +266,60 @@ export class RequestsService {
     }
 
     return recipient;
+  }
+
+  private normalizeListQuery(
+    query: ListRequestsQueryDto,
+  ): NormalizedListRequestsQuery {
+    const requestedLimit = query.limit ?? DEFAULT_REQUEST_PAGE_SIZE;
+    const limit = Math.min(requestedLimit, MAX_REQUEST_PAGE_SIZE);
+
+    return {
+      limit,
+      cursor: this.toNullableString(query.cursor),
+      unread: query.unread === undefined ? null : query.unread === 'true',
+    };
+  }
+
+  private async buildCursorWhere(
+    baseWhere: Prisma.RequestWhereInput,
+    cursor: string | null,
+  ): Promise<Prisma.RequestWhereInput> {
+    if (!cursor) {
+      return baseWhere;
+    }
+
+    const cursorRequest = await this.prisma.request.findFirst({
+      where: {
+        ...baseWhere,
+        id: cursor,
+      },
+      select: {
+        id: true,
+        createdAt: true,
+      },
+    });
+
+    if (!cursorRequest) {
+      throw new BadRequestException('Invalid request cursor.');
+    }
+
+    return {
+      ...baseWhere,
+      OR: [
+        {
+          createdAt: {
+            lt: cursorRequest.createdAt,
+          },
+        },
+        {
+          createdAt: cursorRequest.createdAt,
+          id: {
+            lt: cursorRequest.id,
+          },
+        },
+      ],
+    };
   }
 
   private normalizeCreateRequestDto(
@@ -450,6 +531,22 @@ export class RequestsService {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === 'P2002'
     );
+  }
+
+  private toRequestPage<TRequest extends { id: string }, TItem>(
+    requests: TRequest[],
+    limit: number,
+    mapper: (request: TRequest) => TItem,
+  ) {
+    const hasNextPage = requests.length > limit;
+    const pageRequests = hasNextPage ? requests.slice(0, limit) : requests;
+
+    return {
+      items: pageRequests.map(mapper),
+      nextCursor: hasNextPage
+        ? pageRequests[pageRequests.length - 1]?.id ?? null
+        : null,
+    };
   }
 
   private toRequestInboxItem(request: {

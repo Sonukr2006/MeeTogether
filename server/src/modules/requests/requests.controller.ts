@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VerifiedAccountGuard } from '../auth/guards/verified-account.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { CreateRequestDto } from './dto/create-request.dto';
+import { ListRequestsQueryDto } from './dto/list-requests-query.dto';
 import { UpdateRequestStatusDto } from './dto/update-request-status.dto';
 import { RequestsService } from './requests.service';
 
@@ -13,14 +14,20 @@ export class RequestsController {
 
   @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Get()
-  async getRequests(@CurrentUser() user: AuthenticatedUser) {
-    return this.requestsService.getInboxForUser(user.sub);
+  async getRequests(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListRequestsQueryDto,
+  ) {
+    return this.requestsService.getInboxForUser(user.sub, query);
   }
 
   @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
   @Get('sent')
-  async getSentRequests(@CurrentUser() user: AuthenticatedUser) {
-    return this.requestsService.getSentForUser(user.sub);
+  async getSentRequests(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListRequestsQueryDto,
+  ) {
+    return this.requestsService.getSentForUser(user.sub, query);
   }
 
   @UseGuards(JwtAuthGuard, VerifiedAccountGuard)

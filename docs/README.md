@@ -36,7 +36,7 @@ These must be fixed before a real public launch.
 | --- | --- |
 | `Partial` | Remove `server/.env` from git tracking and rotate any secrets that may have been committed. Repo-side untracking is done; external credential rotation is still required. |
 | `Partial` | Sanitize `server/.env.example`; it must contain placeholders only. Placeholder cleanup is done; rotate any real database credential that may have been exposed there. |
-| `Partial` | Add auth and sender/recipient authorization to requests. Received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read are now authenticated and scoped. Active duplicate requests are protected by a database index, and status/cancel writes use conditional active-state updates; frontend create/cancel wiring, pagination, spam limits, and tests are still required. |
+| `Partial` | Add auth and sender/recipient authorization to requests. Received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read are now authenticated and scoped. Active duplicate requests are protected by a database index, status/cancel writes use conditional active-state updates, and inbox/sent reads support cursor pagination; frontend create/cancel wiring, spam limits, and tests are still required. |
 | `Partial` | Require authenticated access for discussion messages according to the visibility model. Message writes require auth, but message reads are still public. |
 | `Not started` | Enforce project membership or explicit participant access before posting discussion messages. |
 | `Not started` | Align public discovery routes with the product visibility model. Feed, public projects, public profiles, and public resumes should not all be forced behind verified login if they are acquisition surfaces. |
@@ -64,7 +64,7 @@ These must be fixed before a real public launch.
 | Posts/feed | `Partial` | Create/read/like/comment exist, but feed pagination, edit/delete policy, moderation, and URL safety need hardening. |
 | Discussions | `Partial` | Thread/message APIs exist, but read auth, membership checks, pagination, and concurrency safety are missing. |
 | Issues | `Partial` | Read API exists, but create/update/assign workflows and permissions are missing. |
-| Requests | `Partial` | Received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read are authenticated and user-scoped. Duplicate active requests and cancel/status races are now guarded, but frontend create/cancel wiring, pagination, spam limits, and tests are missing. |
+| Requests | `Partial` | Received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read are authenticated and user-scoped. Duplicate active requests, cancel/status races, and unbounded inbox/sent reads are now guarded, but frontend create/cancel wiring, spam limits, and tests are missing. |
 | Profiles/proof resume | `Partial` | Profile read/update exists, but public/private response tests, pagination, proof-source rules, and resume backend contract need work. |
 | Media storage | `Partial` | Upload-target flow exists, but ownership validation, storage-level size enforcement, and final provider decision are missing. |
 | Database scalability | `Partial` | Prisma schema has useful relations and some indexes, but pagination and several hot-path indexes are missing. |
@@ -95,7 +95,7 @@ These must be fixed before a real public launch.
 - [ ] `Partial` Ensure public can read only feed, public projects, and public proof profiles.
 - [ ] `Not started` Split frontend routes into public discovery routes and authenticated collaboration routes. Public product surfaces should not depend on `RequireAuth` unless the launch policy changes.
 - [ ] `Partial` Ensure saved projects are private to the owner unless explicitly made public later.
-- [ ] `Partial` Ensure requests are private to sender/recipient. Received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read are current-user scoped. Related project/thread references now require sender visibility or participation; pagination, abuse controls, frontend creation wiring, and tests are still required.
+- [ ] `Partial` Ensure requests are private to sender/recipient. Received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read are current-user scoped. Related project/thread references now require sender visibility or participation; abuse controls, frontend creation wiring, and tests are still required.
 - [ ] `Not started` Ensure issues follow project visibility and write permissions.
 - [ ] `Not started` Ensure deployments follow project visibility and restrict write access to owner/admin/service identity.
 - [ ] `Not started` Add permission matrix tests from `authorization-rules.md`.
@@ -142,7 +142,7 @@ These must be fixed before a real public launch.
 
 ### Requests
 
-- [ ] `Partial` Add authenticated `GET /requests` for current user's inbox. Backend and frontend now use the current authenticated user; pagination and tests are still missing.
+- [ ] `Partial` Add authenticated `GET /requests` for current user's inbox. Backend and frontend now use the current authenticated user, and the endpoint supports cursor pagination plus unread filtering; tests are still missing.
 - [ ] `Partial` Add create request API. Authenticated users can create validated requests for an existing recipient, self-requests are blocked, related project/thread references require visibility or participation, and duplicate active requests are rejected with a database-backed guard; frontend profile actions and spam limits still need wiring.
 - [ ] `Partial` Add update request status API. Recipients can update active received requests through conditional active-state writes, and terminal/cancelled requests are protected from later status changes; tests are still missing.
 - [ ] `Partial` Add cancel sent request API. Senders can cancel their own pending/replying requests through conditional active-state writes; frontend wiring and tests are still missing.
@@ -150,7 +150,7 @@ These must be fixed before a real public launch.
 - [ ] `Partial` Replace frontend local-only request status and read-state updates with backend persistence. Backend-loaded requests now persist status and mark-all-read changes; local profile-action placeholders remain until real request creation exists.
 - [ ] `Not started` Replace frontend profile-action request placeholders with real request creation.
 - [ ] `Not started` Add request spam rate limits.
-- [ ] `Not started` Add pagination and unread filters.
+- [ ] `Partial` Add pagination and unread filters. `GET /requests` and `GET /requests/sent` support cursor pagination with a maximum page size of 50, and inbox reads support unread filtering; automated tests are still missing.
 - [ ] `Not started` Add tests for inbox privacy, sent privacy, create validation, cancel authorization, and status transitions.
 
 ### Profiles And Proof Resume
@@ -222,8 +222,8 @@ This section names current code areas that need hardening before production.
 
 ### Authorization
 
-- `server/src/modules/requests/requests.controller.ts` now guards received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read, but still needs pagination, abuse limits, and tests.
-- `server/src/modules/requests/requests.service.ts` now scopes request reads and writes to the authenticated sender or recipient, rejects self/duplicate active requests, validates related project/thread access, and prevents status changes after cancel/terminal states with conditional writes, but still needs pagination, transition-policy tests, and spam controls.
+- `server/src/modules/requests/requests.controller.ts` now guards received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read, but still needs abuse limits and tests.
+- `server/src/modules/requests/requests.service.ts` now scopes request reads and writes to the authenticated sender or recipient, rejects self/duplicate active requests, validates related project/thread access, paginates inbox/sent reads, and prevents status changes after cancel/terminal states with conditional writes, but still needs transition-policy tests and spam controls.
 - `server/src/modules/discussions/discussions.controller.ts` exposes thread messages without auth.
 - `server/src/modules/discussions/discussions.service.ts` allows any verified user to post to any existing thread.
 - `server/src/modules/issues/issues.controller.ts` exposes issues without auth even though docs define issue reads as authenticated by default.
