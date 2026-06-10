@@ -46,7 +46,7 @@ These must be fixed before a real public launch.
 | `Partial` | Make rate limiting production-safe with Redis required in production or an explicitly monitored fallback. Current implementation supports Redis but silently falls back to process memory. |
 | `Not started` | Stop storing access tokens in `localStorage`; move toward memory-only access token handling plus refresh-cookie rotation. |
 | `Not started` | Make production email delivery fail closed. Verification/reset emails must not silently fall back to console logging in production. |
-| `Not started` | Fix all lint errors in server and client. Current lint checks fail. |
+| `Partial` | Fix all lint errors in server and client. Server lint now passes and is a CI gate; client lint still fails on existing React/unused-variable issues. |
 | `Not started` | Add automated tests for auth, permissions, discussions, requests, uploads, pagination, and session revocation. |
 | `Not started` | Update the root `README.md` so it matches the current NestJS/Prisma backend reality instead of describing only a frontend-first mocked prototype. |
 | `Not started` | Add production error monitoring and alerting. |
@@ -70,7 +70,7 @@ These must be fixed before a real public launch.
 | Database scalability | `Partial` | Prisma schema has useful relations and some indexes, but pagination and several hot-path indexes are missing. |
 | Rate limiting | `Partial` | Auth limits exist, but production fallback behavior and broader abuse limits are not launch-grade. |
 | Observability | `Partial` | Request IDs and JSON logs exist, but structured logger, error monitoring, metrics, and readiness checks are incomplete. |
-| Tests/CI | `Partial` | GitHub Actions now runs server install, Prisma schema validation, server build, client install, and client build on push, pull request, and manual dispatch. Full lint still fails and production-critical test coverage is missing. |
+| Tests/CI | `Partial` | GitHub Actions now runs server install, Prisma schema validation, server lint, server build, client install, and client build on push, pull request, and manual dispatch. Client lint still fails and production-critical test coverage is missing. |
 | Operations | `Not started` | Staging, backups, restore test, runbooks, rollback process, and monitoring need to be established. |
 | Documentation | `Partial` | Production README exists, but root README and older docs still need alignment with the current backend and launch model. |
 
@@ -188,9 +188,9 @@ These must be fixed before a real public launch.
 - [ ] `Not started` Add server unit and integration test setup.
 - [ ] `Not started` Add client component and integration test setup for auth and core flows.
 - [ ] `Not started` Add e2e smoke tests for signup, login, create project, post discussion message, save project, and request inbox.
-- [ ] `Not started` Make `npm run lint` pass in server.
+- [x] `Done` Make `npm run lint` pass in server.
 - [ ] `Not started` Make `npm run lint` pass in client.
-- [ ] `Partial` Make server build, client build, lint, tests, Prisma generate, and migrations required CI gates. GitHub Actions now gates server build, client build, and Prisma schema validation; lint, tests, Prisma generate, and migration deploy checks are still missing.
+- [ ] `Partial` Make server build, client build, lint, tests, Prisma generate, and migrations required CI gates. GitHub Actions now gates server build, server lint, client build, and Prisma schema validation; client lint, tests, Prisma generate, and migration deploy checks are still missing.
 - [ ] `Partial` Add production cookie/session config test to CI.
 - [ ] `Not started` Add permission matrix tests as release blockers.
 

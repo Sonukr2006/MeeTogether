@@ -64,7 +64,7 @@ export class LikesService {
       }
 
       return parsed;
-    } catch (error) {
+    } catch {
       this.logger.warn(`Failed to parse queued like intent for ${entityType}: ${poppedKey}`);
       return null;
     }

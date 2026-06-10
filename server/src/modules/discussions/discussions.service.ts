@@ -74,28 +74,25 @@ export class DiscussionsService {
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'asc' }],
     });
 
-    const mapped = await Promise.all(
-      threads.map(async (thread) => {
-        const participantState = thread.participantStates?.[0];
-        const unreadCount =
-          userId
-            ? participantState?.unreadCountSnapshot ?? thread._count.messages
-            : 0;
+    const mapped = threads.map((thread) => {
+      const participantState = thread.participantStates?.[0];
+      const unreadCount = userId
+        ? participantState?.unreadCountSnapshot ?? thread._count.messages
+        : 0;
 
-        return {
-          id: thread.id,
-          projectId: thread.projectId,
-          title: thread.title,
-          createdBy: thread.createdBy.name,
-          createdByUser: thread.createdBy,
-          lastActivity: thread.lastMessageAt ?? thread.createdAt,
-          messageCount: thread._count.messages,
-          unreadCount,
-          hasUnread: unreadCount > 0,
-          lastMessagePreview: thread.messages[0]?.message ?? null,
-        };
-      }),
-    );
+      return {
+        id: thread.id,
+        projectId: thread.projectId,
+        title: thread.title,
+        createdBy: thread.createdBy.name,
+        createdByUser: thread.createdBy,
+        lastActivity: thread.lastMessageAt ?? thread.createdAt,
+        messageCount: thread._count.messages,
+        unreadCount,
+        hasUnread: unreadCount > 0,
+        lastMessagePreview: thread.messages[0]?.message ?? null,
+      };
+    });
 
     this.projectThreadsCache.set(cacheKey, mapped);
     return mapped;
