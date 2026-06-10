@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VerifiedAccountGuard } from '../auth/guards/verified-account.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { CreateRequestDto } from './dto/create-request.dto';
 import { UpdateRequestStatusDto } from './dto/update-request-status.dto';
 import { RequestsService } from './requests.service';
 
@@ -14,6 +15,21 @@ export class RequestsController {
   @Get()
   async getRequests(@CurrentUser() user: AuthenticatedUser) {
     return this.requestsService.getInboxForUser(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
+  @Get('sent')
+  async getSentRequests(@CurrentUser() user: AuthenticatedUser) {
+    return this.requestsService.getSentForUser(user.sub);
+  }
+
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
+  @Post()
+  async createRequest(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() createRequestDto: CreateRequestDto,
+  ) {
+    return this.requestsService.createRequest(user.sub, createRequestDto);
   }
 
   @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
@@ -34,5 +50,14 @@ export class RequestsController {
       user.sub,
       updateRequestStatusDto.status,
     );
+  }
+
+  @UseGuards(JwtAuthGuard, VerifiedAccountGuard)
+  @Patch(':requestId/cancel')
+  async cancelRequest(
+    @Param('requestId') requestId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.requestsService.cancelSentRequest(requestId, user.sub);
   }
 }
