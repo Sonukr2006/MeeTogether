@@ -4,7 +4,10 @@ import cookieParser from 'cookie-parser';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import { createRateLimitMiddleware } from './common/middleware/rate-limit.middleware';
+import {
+  createRateLimitMiddleware,
+  initializeRateLimitStore,
+} from './common/middleware/rate-limit.middleware';
 import { requestContextMiddleware } from './common/middleware/request-context.middleware';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -16,6 +19,10 @@ async function bootstrap() {
     configService.get<string[]>('clientOrigins') ?? ['http://localhost:5173'];
   const port = configService.get<number>('port') ?? 4000;
 
+  const httpServer = app.getHttpAdapter().getInstance() as {
+    set(setting: string, value: unknown): void;
+  };
+  httpServer.set('trust proxy', 1);
   app.use(requestContextMiddleware);
   app.use(helmet());
   app.use(json({ limit: '1mb' }));
@@ -24,7 +31,11 @@ async function bootstrap() {
   app.enableCors({
     origin: clientOrigins,
     credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
   });
+  const redisUrl = configService.get<string | undefined>('redisUrl');
+  initializeRateLimitStore(redisUrl);
+
   app.use(
     '/api/v1/auth/signup',
     createRateLimitMiddleware({

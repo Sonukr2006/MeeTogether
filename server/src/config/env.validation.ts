@@ -73,6 +73,10 @@ class EnvVariables {
   AUTH_COOKIE_SAME_SITE?: string;
 
   @IsOptional()
+  @IsString()
+  REDIS_URL?: string;
+
+  @IsOptional()
   @IsIn(['supabase', 's3'])
   STORAGE_PROVIDER?: string;
 
@@ -144,6 +148,13 @@ export function validateEnv(config: Record<string, unknown>) {
 
   if (errors.length > 0) {
     throw new Error(errors.toString());
+  }
+
+  // Additional production-only checks
+  const nodeEnv = (config['NODE_ENV'] as string) ?? process.env.NODE_ENV ?? 'development';
+  const cookieDomain = (config['AUTH_COOKIE_DOMAIN'] as string) ?? process.env.AUTH_COOKIE_DOMAIN;
+  if (nodeEnv === 'production' && (!cookieDomain || cookieDomain.trim() === '')) {
+    throw new Error('AUTH_COOKIE_DOMAIN must be set in production to ensure cookies are scoped correctly');
   }
 
   return validatedConfig;

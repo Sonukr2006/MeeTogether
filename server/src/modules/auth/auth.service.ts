@@ -10,7 +10,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Request, Response } from 'express';
 import type { CookieOptions } from 'express';
 import * as bcrypt from 'bcrypt';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes, createHash, timingSafeEqual } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { UsersService } from '../users/users.service';
@@ -129,12 +129,20 @@ export class AuthService {
 
     this.validateCsrfForSession(req, session.csrfTokenHash);
 
-    await this.prisma.session.update({
-      where: { id: session.id },
+    const updated = await this.prisma.session.updateMany({
+      where: {
+        id: session.id,
+        revokedAt: null,
+      },
       data: {
         revokedAt: new Date(),
       },
     });
+
+    if (updated.count !== 1) {
+      this.clearRefreshCookie(res);
+      throw new UnauthorizedException('Refresh token invalid or expired');
+    }
 
     return this.issueSession(session.user.id, session.user.username, session.user.email, req, res, session.tokenFamilyId);
   }
@@ -339,12 +347,6 @@ export class AuthService {
     res: Response,
     existingTokenFamilyId?: string,
   ) {
-    const accessToken = await this.jwtService.signAsync({
-      sub: userId,
-      username,
-      email,
-    });
-
     const refreshToken = randomBytes(48).toString('hex');
     const refreshTokenHash = this.hashToken(refreshToken);
     const csrfToken = randomBytes(32).toString('hex');
@@ -352,7 +354,7 @@ export class AuthService {
     const refreshTokenTtlDays = this.configService.get<number>('refreshTokenTtlDays') ?? 30;
     const expiresAt = new Date(Date.now() + refreshTokenTtlDays * 24 * 60 * 60 * 1000);
 
-    await this.prisma.session.create({
+    const session = await this.prisma.session.create({
       data: {
         userId,
         refreshTokenHash,
@@ -363,6 +365,13 @@ export class AuthService {
         expiresAt,
         lastUsedAt: new Date(),
       },
+    });
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: userId,
+      sid: session.id,
+      username,
+      email,
     });
 
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, this.getRefreshCookieOptions(expiresAt));
@@ -431,7 +440,7 @@ export class AuthService {
   private getRefreshCookieOptions(expiresAt?: Date): CookieOptions {
     const isProduction = this.configService.get<string>('nodeEnv') === 'production';
     const sameSiteSetting =
-      (this.configService.get<'lax' | 'strict' | 'none'>('auth.cookieSameSite') ?? 'lax');
+      (this.configService.get<'lax' | 'strict' | 'none'>('auth.cookieSameSite') ?? 'none');
     const cookieDomain = this.configService.get<string | undefined>('auth.cookieDomain');
 
     return {
@@ -447,7 +456,7 @@ export class AuthService {
   private getCsrfCookieOptions(expiresAt?: Date): CookieOptions {
     const isProduction = this.configService.get<string>('nodeEnv') === 'production';
     const sameSiteSetting =
-      (this.configService.get<'lax' | 'strict' | 'none'>('auth.cookieSameSite') ?? 'lax');
+      (this.configService.get<'lax' | 'strict' | 'none'>('auth.cookieSameSite') ?? 'none');
     const cookieDomain = this.configService.get<string | undefined>('auth.cookieDomain');
 
     return {
@@ -471,7 +480,16 @@ export class AuthService {
     const headerToken = req.get(CSRF_HEADER_NAME);
     const cookieToken = this.getCsrfTokenFromRequest(req);
 
-    if (!headerToken || !cookieToken || headerToken !== cookieToken) {
+    if (!headerToken || !cookieToken) {
+      throw new UnauthorizedException('CSRF token missing or invalid');
+    }
+
+    const headerBuffer = Buffer.from(headerToken, 'utf8');
+    const cookieBuffer = Buffer.from(cookieToken, 'utf8');
+    if (
+      headerBuffer.length !== cookieBuffer.length ||
+      !timingSafeEqual(headerBuffer, cookieBuffer)
+    ) {
       throw new UnauthorizedException('CSRF token missing or invalid');
     }
 

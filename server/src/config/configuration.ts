@@ -9,8 +9,9 @@ export default () => ({
   },
   auth: {
     cookieDomain: process.env.AUTH_COOKIE_DOMAIN || undefined,
-    cookieSameSite: process.env.AUTH_COOKIE_SAME_SITE ?? 'lax',
+    cookieSameSite: process.env.AUTH_COOKIE_SAME_SITE ?? 'none',
   },
+  redisUrl: process.env.REDIS_URL || undefined,
   refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 30),
   emailVerificationTtlHours: Number(process.env.EMAIL_VERIFICATION_TTL_HOURS ?? 24),
   passwordResetTtlMinutes: Number(process.env.PASSWORD_RESET_TTL_MINUTES ?? 30),

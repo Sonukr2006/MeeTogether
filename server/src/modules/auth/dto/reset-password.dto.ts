@@ -1,7 +1,8 @@
-import { IsString, MaxLength, MinLength } from 'class-validator';
+import { IsString, MaxLength, MinLength, Matches } from 'class-validator';
 
 export class ResetPasswordDto {
   @IsString()
+  @Matches(/^[a-f0-9]{64}$/)
   token!: string;
 
   @IsString()
