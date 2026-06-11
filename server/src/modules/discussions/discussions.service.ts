@@ -314,7 +314,7 @@ export class DiscussionsService {
   private async ensureCanPostThreadMessage(threadId: string, userId: string) {
     const thread = await this.findThreadAccess(threadId, userId);
 
-    if (!thread) {
+    if (!thread || !this.canViewThread(thread, userId)) {
       throw new NotFoundException('Discussion thread not found');
     }
 
