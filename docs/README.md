@@ -37,8 +37,8 @@ These must be fixed before a real public launch.
 | `Partial` | Remove `server/.env` from git tracking and rotate any secrets that may have been committed. Repo-side untracking is done; external credential rotation is still required. |
 | `Partial` | Sanitize `server/.env.example`; it must contain placeholders only. Placeholder cleanup is done; rotate any real database credential that may have been exposed there. |
 | `Partial` | Add auth and sender/recipient authorization to requests. Received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read are now authenticated and scoped. Active duplicate requests are protected by a database index, status/cancel writes use conditional active-state updates, inbox/sent reads support cursor pagination, and request creation has DB-backed abuse caps; frontend create/cancel wiring, tests, monitoring, and tuning are still required. |
-| `Partial` | Require authenticated access for discussion messages according to the visibility model. Message writes require auth, but message reads are still public. |
-| `Not started` | Enforce project membership or explicit participant access before posting discussion messages. |
+| `Partial` | Require authenticated access for discussion messages according to the visibility model. Thread lists and messages now require verified auth and apply project visibility checks; pagination and permission tests are still required. |
+| `Partial` | Enforce project membership or explicit participant access before posting discussion messages. Posting now requires thread creator, project owner, or project member; automated permission tests and a richer participant model are still required. |
 | `Not started` | Align public discovery routes with the product visibility model. Feed, public projects, public profiles, and public resumes should not all be forced behind verified login if they are acquisition surfaces. |
 | `Not started` | Add pagination to all list endpoints: posts, projects, project comments, post comments, threads, messages, issues, requests, deployments, saved projects, and profile activity. |
 | `Not started` | Add ownership checks for upload targets. Users must not be able to mint project/post media paths for resources they do not own or cannot edit. |
@@ -59,10 +59,10 @@ These must be fixed before a real public launch.
 | Area | Status | Notes |
 | --- | --- | --- |
 | Auth basics | `Partial` | Signup, login, JWT, refresh sessions, logout, email verification, and password reset exist, but need tests and token-storage hardening. |
-| Authorization | `Not started` | Several private surfaces lack route guards or resource-level permission checks. |
+| Authorization | `Partial` | Requests and discussions now have stronger route guards and resource-level checks, but issues, deployments, uploads, and broader permission tests are still missing. |
 | Projects | `Partial` | Create/read/like/save/comment exist, but pagination, edit APIs, visibility rules, and permission tests are missing. |
 | Posts/feed | `Partial` | Create/read/like/comment exist, but feed pagination, edit/delete policy, moderation, and URL safety need hardening. |
-| Discussions | `Partial` | Thread/message APIs exist, but read auth, membership checks, pagination, and concurrency safety are missing. |
+| Discussions | `Partial` | Thread/message reads require verified auth and project visibility checks, and message posting is owner/member/creator scoped; pagination, tests, and sequence concurrency safety are still missing. |
 | Issues | `Partial` | Read API exists, but create/update/assign workflows and permissions are missing. |
 | Requests | `Partial` | Received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read are authenticated and user-scoped. Duplicate active requests, cancel/status races, unbounded inbox/sent reads, and basic request-creation spam are now guarded, but frontend create/cancel wiring, tests, monitoring, and tuning are missing. |
 | Profiles/proof resume | `Partial` | Profile read/update exists, but public/private response tests, pagination, proof-source rules, and resume backend contract need work. |
@@ -122,8 +122,8 @@ These must be fixed before a real public launch.
 
 ### Discussions
 
-- [ ] `Partial` Require auth for thread/message reads unless a thread is explicitly public-read.
-- [ ] `Not started` Enforce project membership or allowed participant status before message creation.
+- [ ] `Partial` Require auth for thread/message reads unless a thread is explicitly public-read. Backend now requires verified auth and checks project visibility for thread lists and messages; pagination and tests are still missing.
+- [ ] `Partial` Enforce project membership or allowed participant status before message creation. Backend now allows posting only for thread creator, project owner, or project member; tests and explicit participant roles are still missing.
 - [ ] `Not started` Add cursor pagination for thread messages with a default page size of 30 to 50.
 - [ ] `Not started` Fix sequence-number race risk by using a transaction or database-safe sequence strategy.
 - [ ] `Partial` Add edit/delete fields and policy if message editing becomes launch scope.
@@ -224,8 +224,8 @@ This section names current code areas that need hardening before production.
 
 - `server/src/modules/requests/requests.controller.ts` now guards received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read, but still needs abuse limits and tests.
 - `server/src/modules/requests/requests.service.ts` now scopes request reads and writes to the authenticated sender or recipient, rejects self/duplicate active requests, validates related project/thread access, paginates inbox/sent reads, limits request creation abuse, and prevents status changes after cancel/terminal states with conditional writes, but still needs transition-policy tests, abuse-limit tests, and production tuning.
-- `server/src/modules/discussions/discussions.controller.ts` exposes thread messages without auth.
-- `server/src/modules/discussions/discussions.service.ts` allows any verified user to post to any existing thread.
+- `server/src/modules/discussions/discussions.controller.ts` now requires verified auth for thread lists, thread messages, message creation, and read-state updates.
+- `server/src/modules/discussions/discussions.service.ts` now enforces project visibility for reading and owner/member/thread-creator rules for posting, but still needs pagination, sequence race fixes, and permission tests.
 - `server/src/modules/issues/issues.controller.ts` exposes issues without auth even though docs define issue reads as authenticated by default.
 - `server/src/modules/deployments/deployments.controller.ts` exposes all deployments without visibility checks.
 - Permission logic is not centralized yet, which will become hard to maintain as routes grow.

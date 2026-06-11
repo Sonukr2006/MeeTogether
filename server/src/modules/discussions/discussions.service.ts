@@ -1,7 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { TtlCache } from 'src/common/utils/ttl-cache';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateMessageDto } from './dto/create-message.dto';
+
+type ProjectDiscussionAccess = {
+  ownerUserId: string;
+  visibility: string;
+  members: Array<{ id: string }>;
+};
+
+type ThreadDiscussionAccess = {
+  createdByUserId: string;
+  project: ProjectDiscussionAccess;
+};
 
 @Injectable()
 export class DiscussionsService {
@@ -33,8 +44,10 @@ export class DiscussionsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async getThreadsForProject(projectId: string, userId?: string) {
-    const cacheKey = userId ? `${projectId}:${userId}` : projectId;
+  async getThreadsForProject(projectId: string, userId: string) {
+    await this.ensureCanViewProjectDiscussions(projectId, userId);
+
+    const cacheKey = `${projectId}:${userId}`;
     const cached = this.projectThreadsCache.get(cacheKey);
     if (cached) {
       return cached;
@@ -56,15 +69,13 @@ export class DiscussionsService {
             message: true,
           },
         },
-        participantStates: userId
-          ? {
-              where: { userId },
-              select: {
-                unreadCountSnapshot: true,
-              },
-              take: 1,
-            }
-          : false,
+        participantStates: {
+          where: { userId },
+          select: {
+            unreadCountSnapshot: true,
+          },
+          take: 1,
+        },
         _count: {
           select: {
             messages: true,
@@ -76,9 +87,8 @@ export class DiscussionsService {
 
     const mapped = threads.map((thread) => {
       const participantState = thread.participantStates?.[0];
-      const unreadCount = userId
-        ? participantState?.unreadCountSnapshot ?? thread._count.messages
-        : 0;
+      const unreadCount =
+        participantState?.unreadCountSnapshot ?? thread._count.messages;
 
       return {
         id: thread.id,
@@ -98,7 +108,9 @@ export class DiscussionsService {
     return mapped;
   }
 
-  async getMessagesForThread(threadId: string) {
+  async getMessagesForThread(threadId: string, userId: string) {
+    await this.ensureCanViewThread(threadId, userId);
+
     const cached = this.threadMessagesCache.get(threadId);
     if (cached) {
       return cached;
@@ -144,6 +156,8 @@ export class DiscussionsService {
   }
 
   async createMessage(threadId: string, userId: string, createMessageDto: CreateMessageDto) {
+    await this.ensureCanPostThreadMessage(threadId, userId);
+
     const thread = await this.prisma.discussionThread.findUnique({
       where: { id: threadId },
       include: {
@@ -237,6 +251,8 @@ export class DiscussionsService {
   }
 
   async markThreadRead(threadId: string, userId: string) {
+    await this.ensureCanViewThread(threadId, userId);
+
     const latestMessage = await this.prisma.discussionMessage.findFirst({
       where: { threadId },
       orderBy: [{ sequenceNumber: 'desc' }, { createdAt: 'desc' }],
@@ -266,5 +282,90 @@ export class DiscussionsService {
     this.projectThreadsCache.clear();
 
     return { success: true };
+  }
+
+  private async ensureCanViewProjectDiscussions(projectId: string, userId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        ownerUserId: true,
+        visibility: true,
+        members: {
+          where: { userId },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+
+    if (!project || !this.canViewProjectDiscussions(project, userId)) {
+      throw new NotFoundException('Project discussions not found');
+    }
+  }
+
+  private async ensureCanViewThread(threadId: string, userId: string) {
+    const thread = await this.findThreadAccess(threadId, userId);
+
+    if (!thread || !this.canViewThread(thread, userId)) {
+      throw new NotFoundException('Discussion thread not found');
+    }
+  }
+
+  private async ensureCanPostThreadMessage(threadId: string, userId: string) {
+    const thread = await this.findThreadAccess(threadId, userId);
+
+    if (!thread) {
+      throw new NotFoundException('Discussion thread not found');
+    }
+
+    if (!this.canPostThreadMessage(thread, userId)) {
+      throw new ForbiddenException('You are not allowed to post in this discussion.');
+    }
+  }
+
+  private findThreadAccess(threadId: string, userId: string) {
+    return this.prisma.discussionThread.findUnique({
+      where: { id: threadId },
+      select: {
+        createdByUserId: true,
+        project: {
+          select: {
+            ownerUserId: true,
+            visibility: true,
+            members: {
+              where: { userId },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
+      },
+    });
+  }
+
+  private canViewProjectDiscussions(
+    project: ProjectDiscussionAccess,
+    userId: string,
+  ) {
+    return (
+      project.visibility === 'public' ||
+      project.ownerUserId === userId ||
+      project.members.length > 0
+    );
+  }
+
+  private canViewThread(thread: ThreadDiscussionAccess, userId: string) {
+    return (
+      this.canViewProjectDiscussions(thread.project, userId) ||
+      thread.createdByUserId === userId
+    );
+  }
+
+  private canPostThreadMessage(thread: ThreadDiscussionAccess, userId: string) {
+    return (
+      thread.createdByUserId === userId ||
+      thread.project.ownerUserId === userId ||
+      thread.project.members.length > 0
+    );
   }
 }
