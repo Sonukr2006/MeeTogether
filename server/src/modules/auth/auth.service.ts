@@ -23,6 +23,12 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
 const REFRESH_COOKIE_NAME = 'mt_refresh_token';
 const CSRF_COOKIE_NAME = 'mt_csrf_token';
 const CSRF_HEADER_NAME = 'x-csrf-token';
+
+/**
+ * Module-scoped variable storing the last generated one-time token for debug inspection.
+ * Only populated when NODE_ENV !== 'production'.
+ */
+export let lastDebugToken: { type: string; token: string; expiresAt: Date } | null = null;
 type RequestWithCookies = Request & {
   cookies?: Record<string, string | undefined>;
 };
@@ -66,10 +72,7 @@ export class AuthService {
     const sessionResult = await this.issueSession(user.id, user.username, user.email, req, res);
     await this.sendVerificationEmail(user.email, verification.token);
 
-    return {
-      ...sessionResult,
-      verification: this.buildTokenPreview('email_verification', verification.token, verification.expiresAt),
-    };
+    return sessionResult;
   }
 
   async login(loginDto: LoginDto, req: Request, res: Response) {
@@ -263,8 +266,7 @@ export class AuthService {
 
     return {
       success: true,
-      message: 'Verification token refreshed',
-      verification: this.buildTokenPreview('email_verification', verification.token, verification.expiresAt),
+      message: 'Verification email resent',
     };
   }
 
@@ -284,6 +286,7 @@ export class AuthService {
 
     const reset = this.generateOneTimeToken(
       (this.configService.get<number>('passwordResetTtlMinutes') ?? 30) * 60 * 1000,
+      'reset',
     );
 
     await this.prisma.user.update({
@@ -299,7 +302,6 @@ export class AuthService {
     return {
       success: true,
       message: 'If the account exists, a password reset link has been prepared',
-      reset: this.buildTokenPreview('password_reset', reset.token, reset.expiresAt),
     };
   }
 
@@ -367,11 +369,14 @@ export class AuthService {
       },
     });
 
+    const user = await this.usersService.getPublicUserById(userId);
+
     const accessToken = await this.jwtService.signAsync({
       sub: userId,
       sid: session.id,
       username,
       email,
+      emailVerified: user.emailVerified ?? false,
     });
 
     res.cookie(REFRESH_COOKIE_NAME, refreshToken, this.getRefreshCookieOptions(expiresAt));
@@ -379,7 +384,7 @@ export class AuthService {
 
     return {
       accessToken,
-      user: await this.usersService.getPublicUserById(userId),
+      user,
     };
   }
 
@@ -474,7 +479,7 @@ export class AuthService {
     sessionCsrfTokenHash?: string | null,
   ) {
     if (!sessionCsrfTokenHash) {
-      return;
+      throw new UnauthorizedException('Session expired — please log in again');
     }
 
     const headerToken = req.get(CSRF_HEADER_NAME);
@@ -512,25 +517,19 @@ export class AuthService {
     }
   }
 
-  private generateOneTimeToken(ttlMs?: number) {
+  private generateOneTimeToken(ttlMs?: number, type: string = 'verification') {
     const token = randomBytes(32).toString('hex');
     const defaultTtlHours = this.configService.get<number>('emailVerificationTtlHours') ?? 24;
     const expiresAt = new Date(Date.now() + (ttlMs ?? defaultTtlHours * 60 * 60 * 1000));
 
+    if (process.env.NODE_ENV !== 'production') {
+      lastDebugToken = { type, token, expiresAt };
+    }
+
     return { token, expiresAt };
   }
 
-  private buildTokenPreview(type: 'email_verification' | 'password_reset', token: string, expiresAt: Date) {
-    if (this.configService.get<string>('nodeEnv') === 'production') {
-      return undefined;
-    }
 
-    return {
-      type,
-      token,
-      expiresAt,
-    };
-  }
 
   private async sendVerificationEmail(email: string, token: string) {
     const appBaseUrl = this.configService.get<string>('appBaseUrl') ?? 'http://localhost:5173';
