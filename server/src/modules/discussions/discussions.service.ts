@@ -1,7 +1,12 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
+import { PaginatedResponse } from 'src/common/interfaces/paginated-response.interface';
 import { TtlCache } from 'src/common/utils/ttl-cache';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateMessageDto } from './dto/create-message.dto';
+
+const MESSAGE_SEQUENCE_RETRY_LIMIT = 3;
 
 type ProjectDiscussionAccess = {
   ownerUserId: string;
@@ -108,78 +113,48 @@ export class DiscussionsService {
     return mapped;
   }
 
-  async getMessagesForThread(threadId: string, userId: string) {
+  async getMessagesForThread(threadId: string, userId: string, query?: CursorPaginationDto): Promise<PaginatedResponse<{
+    id: string;
+    threadId: string;
+    author: string;
+    authorUser: { id: string; name: string };
+    role: string;
+    message: string;
+    sentAt: Date;
+  }>> {
     await this.ensureCanViewThread(threadId, userId);
 
-    const cached = this.threadMessagesCache.get(threadId);
-    if (cached) {
-      return cached;
+    const limit = Math.min(query?.limit ?? 40, 50);
+    const cursor = query?.cursor;
+
+    // Only use cache for the first page (no cursor)
+    if (!cursor) {
+      const cacheKey = `${threadId}:${userId}`;
+      const cached = this.threadMessagesCache.get(cacheKey);
+      if (cached) {
+        return {
+          data: cached,
+          pagination: {
+            nextCursor: cached.length === limit ? cached[cached.length - 1].id : null,
+            hasMore: cached.length === limit,
+          },
+        };
+      }
     }
 
     const thread = await this.prisma.discussionThread.findUnique({
       where: { id: threadId },
-      include: {
-        messages: {
-          include: {
-            author: {
-              select: {
-                id: true,
-                name: true,
-                title: true,
-              },
-            },
-          },
-          orderBy: [{ sequenceNumber: 'asc' }, { createdAt: 'asc' }],
-        },
-      },
     });
 
     if (!thread) {
       throw new NotFoundException('Discussion thread not found');
     }
 
-    const mapped = thread.messages.map((message) => ({
-      id: message.id,
-      threadId: thread.id,
-      author: message.author.name,
-      authorUser: {
-        id: message.author.id,
-        name: message.author.name,
-      },
-      role: message.author.title ?? 'Builder',
-      message: message.message,
-      sentAt: message.createdAt,
-    }));
-
-    this.threadMessagesCache.set(threadId, mapped);
-    return mapped;
-  }
-
-  async createMessage(threadId: string, userId: string, createMessageDto: CreateMessageDto) {
-    await this.ensureCanPostThreadMessage(threadId, userId);
-
-    const thread = await this.prisma.discussionThread.findUnique({
-      where: { id: threadId },
-      include: {
-        _count: {
-          select: {
-            messages: true,
-          },
-        },
-      },
-    });
-
-    if (!thread) {
-      throw new NotFoundException('Discussion thread not found');
-    }
-
-    const message = await this.prisma.discussionMessage.create({
-      data: {
-        threadId,
-        authorUserId: userId,
-        message: createMessageDto.message,
-        sequenceNumber: thread._count.messages + 1,
-      },
+    const messages = await this.prisma.discussionMessage.findMany({
+      where: { threadId },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: [{ sequenceNumber: 'asc' }, { createdAt: 'asc' }],
       include: {
         author: {
           select: {
@@ -191,49 +166,49 @@ export class DiscussionsService {
       },
     });
 
-    await this.prisma.discussionThread.update({
-      where: { id: threadId },
-      data: {
-        lastMessageAt: message.createdAt,
-      },
-    });
+    const hasMore = messages.length > limit;
+    const data = hasMore ? messages.slice(0, limit) : messages;
 
-    await this.prisma.threadParticipantState.upsert({
-      where: {
-        threadId_userId: {
-          threadId,
-          userId,
-        },
+    const mapped = data.map((message) => ({
+      id: message.id,
+      threadId,
+      author: message.author.name,
+      authorUser: {
+        id: message.author.id,
+        name: message.author.name,
       },
-      update: {
-        lastReadAt: message.createdAt,
-        lastReadMessageId: message.id,
-        unreadCountSnapshot: 0,
-      },
-      create: {
-        threadId,
-        userId,
-        lastReadAt: message.createdAt,
-        lastReadMessageId: message.id,
-        unreadCountSnapshot: 0,
-      },
-    });
+      role: message.author.title ?? 'Builder',
+      message: message.message,
+      sentAt: message.createdAt,
+    }));
 
-    await this.prisma.threadParticipantState.updateMany({
-      where: {
-        threadId,
-        userId: {
-          not: userId,
-        },
-      },
-      data: {
-        unreadCountSnapshot: {
-          increment: 1,
-        },
-      },
-    });
+    // Cache only the first page
+    if (!cursor) {
+      const cacheKey = `${threadId}:${userId}`;
+      this.threadMessagesCache.set(cacheKey, mapped);
+    }
 
-    this.threadMessagesCache.clear(threadId);
+    const nextCursor = hasMore ? mapped[mapped.length - 1].id : null;
+
+    return {
+      data: mapped,
+      pagination: {
+        nextCursor,
+        hasMore,
+      },
+    };
+  }
+
+  async createMessage(threadId: string, userId: string, createMessageDto: CreateMessageDto) {
+    await this.ensureCanPostThreadMessage(threadId, userId);
+
+    const message = await this.createMessageWithSequenceRetry(
+      threadId,
+      userId,
+      createMessageDto.message,
+    );
+
+    this.threadMessagesCache.clear();
     this.projectThreadsCache.clear();
 
     return {
@@ -248,6 +223,102 @@ export class DiscussionsService {
       message: message.message,
       sentAt: message.createdAt,
     };
+  }
+
+  private async createMessageWithSequenceRetry(
+    threadId: string,
+    userId: string,
+    messageText: string,
+  ) {
+    for (let attempt = 1; attempt <= MESSAGE_SEQUENCE_RETRY_LIMIT; attempt += 1) {
+      try {
+        return await this.createMessageTransaction(threadId, userId, messageText);
+      } catch (error) {
+        if (!this.isMessageSequenceConflict(error)) {
+          throw error;
+        }
+
+        if (attempt === MESSAGE_SEQUENCE_RETRY_LIMIT) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error('Message sequence allocation failed');
+  }
+
+  private createMessageTransaction(
+    threadId: string,
+    userId: string,
+    messageText: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const latestMessage = await tx.discussionMessage.findFirst({
+        where: { threadId },
+        orderBy: [{ sequenceNumber: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          sequenceNumber: true,
+        },
+      });
+      const nextSequenceNumber = (latestMessage?.sequenceNumber ?? 0) + 1;
+
+      const message = await tx.discussionMessage.create({
+        data: {
+          threadId,
+          authorUserId: userId,
+          message: messageText,
+          sequenceNumber: nextSequenceNumber,
+        },
+        include: {
+          author: {
+            select: {
+              id: true,
+              name: true,
+              title: true,
+            },
+          },
+        },
+      });
+
+      await tx.discussionThread.update({
+        where: { id: threadId },
+        data: {
+          lastMessageAt: message.createdAt,
+        },
+      });
+
+      await tx.threadParticipantState.upsert({
+        where: {
+          threadId_userId: {
+            threadId,
+            userId,
+          },
+        },
+        update: {
+          lastReadAt: message.createdAt,
+          lastReadMessageId: message.id,
+          unreadCountSnapshot: 0,
+        },
+        create: {
+          threadId,
+          userId,
+          lastReadAt: message.createdAt,
+          lastReadMessageId: message.id,
+          unreadCountSnapshot: 0,
+        },
+      });
+
+      await tx.$executeRaw`
+        UPDATE "ThreadParticipantState"
+        SET "unreadCountSnapshot" = COALESCE("unreadCountSnapshot", 0) + 1,
+            "updatedAt" = NOW()
+        WHERE "threadId" = ${threadId}
+          AND "userId" != ${userId}
+          AND ("lastReadAt" IS NULL OR "lastReadAt" < ${message.createdAt})
+      `;
+
+      return message;
+    });
   }
 
   async markThreadRead(threadId: string, userId: string) {
@@ -279,6 +350,7 @@ export class DiscussionsService {
       },
     });
 
+    this.threadMessagesCache.clear(`${threadId}:${userId}`);
     this.projectThreadsCache.clear();
 
     return { success: true };
@@ -367,5 +439,26 @@ export class DiscussionsService {
       thread.project.ownerUserId === userId ||
       thread.project.members.length > 0
     );
+  }
+
+  private isMessageSequenceConflict(error: unknown) {
+    if (
+      !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+      error.code !== 'P2002'
+    ) {
+      return false;
+    }
+
+    const target = error.meta?.target;
+
+    if (Array.isArray(target)) {
+      return target.includes('threadId') && target.includes('sequenceNumber');
+    }
+
+    if (typeof target === 'string') {
+      return target.includes('threadId') && target.includes('sequenceNumber');
+    }
+
+    return false;
   }
 }
