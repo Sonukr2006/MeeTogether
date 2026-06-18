@@ -8,7 +8,8 @@ export const fetchPosts = createAsyncThunk(
   "posts/fetchPosts",
   async () => {
     const response = await apiRequest("/posts");
-    return Array.isArray(response) ? response.map(mapApiPostToCard) : [];
+    const items = response?.data ?? (Array.isArray(response) ? response : []);
+    return items.map(mapApiPostToCard);
   },
   {
     condition: (_, { getState }) => {

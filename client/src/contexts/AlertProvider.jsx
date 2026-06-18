@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState } from "react";
 import Alert from "../components/ui/Alert";
 
 const AlertContext = createContext();
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAlert = () => useContext(AlertContext);
 
 export const AlertProvider = ({ children }) => {

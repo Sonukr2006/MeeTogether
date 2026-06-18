@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma, PostType } from '@prisma/client';
 import { TtlCache } from 'src/common/utils/ttl-cache';
+import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
+import { PaginatedResponse } from 'src/common/interfaces/paginated-response.interface';
 import { LikesService } from '../likes/likes.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
@@ -55,7 +57,6 @@ type PostCommentWithAuthor = Prisma.PostCommentGetPayload<{
 
 @Injectable()
 export class PostsService {
-  private readonly postsFeedCache = new TtlCache<ReturnType<PostsService['toFeedPost']>[]>(30_000);
   private readonly postCommentsCache = new TtlCache<
     ReturnType<PostsService['toPostComment']>[]
   >(30_000);
@@ -67,22 +68,30 @@ export class PostsService {
     private readonly likesService: LikesService,
   ) {}
 
-  async getFeedPosts() {
-    const cached = this.postsFeedCache.get('feed');
-    if (cached) {
-      return cached;
-    }
+  async getFeedPosts(query: CursorPaginationDto = {}): Promise<PaginatedResponse<ReturnType<PostsService['toFeedPost']>>> {
+    const limit = Math.min(query.limit ?? 20, 50);
 
     const posts = await this.prisma.post.findMany({
+      take: limit + 1,
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
       include: postInclude,
       orderBy: {
         createdAt: 'desc',
       },
     });
 
-    const mapped = posts.map((post) => this.toFeedPost(post));
-    this.postsFeedCache.set('feed', mapped);
-    return mapped;
+    const hasMore = posts.length > limit;
+    const data = hasMore ? posts.slice(0, limit) : posts;
+    const mapped = data.map((post) => this.toFeedPost(post));
+    const nextCursor = hasMore ? data[data.length - 1].id : null;
+
+    return {
+      data: mapped,
+      pagination: {
+        nextCursor,
+        hasMore,
+      },
+    };
   }
 
   async createPost(userId: string, createPostDto: CreatePostDto) {
@@ -139,15 +148,11 @@ export class PostsService {
       });
     });
 
-    this.postsFeedCache.clear();
     return this.toFeedPost(created);
   }
 
-  async getComments(postId: string) {
-    const cached = this.postCommentsCache.get(postId);
-    if (cached) {
-      return cached;
-    }
+  async getComments(postId: string, dto?: CursorPaginationDto): Promise<PaginatedResponse<ReturnType<PostsService['toPostComment']>>> {
+    const limit = Math.min(dto?.limit ?? 30, 50);
 
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
@@ -162,11 +167,18 @@ export class PostsService {
       where: { postId },
       include: postCommentInclude,
       orderBy: [{ createdAt: 'asc' }],
+      take: limit + 1,
+      ...(dto?.cursor ? { cursor: { id: dto.cursor }, skip: 1 } : {}),
     });
 
-    const mapped = comments.map((comment) => this.toPostComment(comment));
-    this.postCommentsCache.set(postId, mapped);
-    return mapped;
+    const hasMore = comments.length > limit;
+    const data = hasMore ? comments.slice(0, limit) : comments;
+    const nextCursor = hasMore ? data[data.length - 1].id : null;
+
+    return {
+      data: data.map((comment) => this.toPostComment(comment)),
+      pagination: { nextCursor, hasMore },
+    };
   }
 
   async createComment(postId: string, userId: string, message: string) {
@@ -208,7 +220,6 @@ export class PostsService {
     });
 
     this.postCommentsCache.clear(postId);
-    this.postsFeedCache.clear();
 
     return {
       comment: this.toPostComment(created.comment),
@@ -262,21 +273,16 @@ export class PostsService {
           where: { id: existing.id },
         });
 
-        const updated = await tx.post.update({
+        await tx.$executeRaw`UPDATE "Post" SET "likesCount" = GREATEST("likesCount" - 1, 0), "updatedAt" = NOW() WHERE id = ${postId} AND "likesCount" > 0`;
+
+        const current = await tx.post.findUniqueOrThrow({
           where: { id: postId },
-          data: {
-            likesCount: {
-              decrement: 1,
-            },
-          },
-          select: {
-            likesCount: true,
-          },
+          select: { likesCount: true },
         });
 
         return {
           liked: false,
-          likesCount: Math.max(0, updated.likesCount),
+          likesCount: current.likesCount,
         };
       }
 
@@ -329,7 +335,6 @@ export class PostsService {
       };
     });
 
-    this.postsFeedCache.clear();
     return {
       postId,
       ...result,

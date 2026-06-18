@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VerifiedAccountGuard } from '../auth/guards/verified-account.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
@@ -23,9 +24,10 @@ export class DiscussionsController {
   @Get('threads/:threadId/messages')
   async getMessagesForThread(
     @Param('threadId') threadId: string,
+    @Query() query: CursorPaginationDto,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.discussionsService.getMessagesForThread(threadId, user.sub);
+    return this.discussionsService.getMessagesForThread(threadId, user.sub, query);
   }
 
   @UseGuards(JwtAuthGuard, VerifiedAccountGuard)

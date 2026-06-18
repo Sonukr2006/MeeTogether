@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { apiRequest } from "../../lib/api";
 import { closeComments } from "../../store/postInteractionsSlice";
@@ -19,7 +19,13 @@ export default function CommentModal({
   const dispatch = useDispatch();
   const currentUser = useSelector((state) => state.auth.currentUser);
   const panelRef = useRef(null);
-  const handleClose = onClose ?? (() => dispatch(closeComments()));
+  const handleClose = useCallback(() => {
+    if (onClose) {
+      onClose();
+    } else {
+      dispatch(closeComments());
+    }
+  }, [onClose, dispatch]);
   const [comments, setComments] = useState([]);
   const [draft, setDraft] = useState("");
   const resourceId = postId ?? projectId;
@@ -58,12 +64,13 @@ export default function CommentModal({
       try {
         setIsLoading(true);
         setError("");
-        const data = await apiRequest(`/${entityType}s/${resourceId}/comments`);
+        const response = await apiRequest(`/${entityType}s/${resourceId}/comments`);
 
         if (!ignore) {
-          setComments(Array.isArray(data) ? data : []);
+          const items = response?.data ?? (Array.isArray(response) ? response : []);
+          setComments(items);
         }
-      } catch (loadError) {
+      } catch {
         if (!ignore) {
           setError("Could not load comments right now.");
         }

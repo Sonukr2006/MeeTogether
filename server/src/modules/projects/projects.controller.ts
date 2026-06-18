@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "src/common/decorators/current-user.decorator";
+import { CursorPaginationDto } from "src/common/dto/cursor-pagination.dto";
 import { JwtAuthGuard } from "../auth/guards/jwt-auth.guard";
 import { VerifiedAccountGuard } from "../auth/guards/verified-account.guard";
 import { AuthenticatedUser } from "../auth/types/authenticated-user.type";
@@ -14,8 +15,8 @@ export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Get()
-  async getProjects() {
-    return this.projectsService.getProjects();
+  async getProjects(@Query() query: CursorPaginationDto) {
+    return this.projectsService.getProjects(query);
   }
 
   @Get(":projectId")
@@ -24,8 +25,11 @@ export class ProjectsController {
   }
 
   @Get(":projectId/comments")
-  async getComments(@Param("projectId") projectId: string) {
-    return this.projectsService.getComments(projectId);
+  async getComments(
+    @Param("projectId") projectId: string,
+    @Query() query: CursorPaginationDto,
+  ) {
+    return this.projectsService.getComments(projectId, query);
   }
 
   @UseGuards(JwtAuthGuard, VerifiedAccountGuard)

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { IssuePriority, IssueStatus, Prisma } from '@prisma/client';
+import { PaginatedResponse } from 'src/common/interfaces/paginated-response.interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 const issueInclude = {
@@ -39,17 +40,40 @@ type IssueWithRelations = Prisma.IssueGetPayload<{
 export class IssuesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getIssues(filters: { projectId?: string; status?: string }) {
+  async getIssues(filters: { projectId?: string; status?: string; cursor?: string; limit?: number }): Promise<PaginatedResponse<{
+    id: string;
+    title: string;
+    description: string | null;
+    owner: string;
+    status: string;
+    projectId: string;
+    projectTitle: string;
+    difficulty: string;
+    mentorStatus: string;
+    stack: string[];
+    roleNeed: string;
+    priority: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }>> {
+    const limit = Math.min(filters.limit ?? 20, 50);
+    const cursor = filters.cursor;
+
     const issues = await this.prisma.issue.findMany({
       where: {
         projectId: filters.projectId || undefined,
         status: this.toIssueStatus(filters.status),
       },
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: issueInclude,
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
-    return issues.map((issue: IssueWithRelations) => ({
+    const hasMore = issues.length > limit;
+    const data = hasMore ? issues.slice(0, limit) : issues;
+
+    const mapped = data.map((issue: IssueWithRelations) => ({
       id: issue.id,
       title: issue.title,
       description: issue.description,
@@ -65,6 +89,16 @@ export class IssuesService {
       createdAt: issue.createdAt,
       updatedAt: issue.updatedAt,
     }));
+
+    const nextCursor = hasMore ? mapped[mapped.length - 1].id : null;
+
+    return {
+      data: mapped,
+      pagination: {
+        nextCursor,
+        hasMore,
+      },
+    };
   }
 
   private toIssueStatus(status?: string): IssueStatus | undefined {

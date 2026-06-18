@@ -1,11 +1,5 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
-import { apiRequest } from "../lib/api";
-
-const AUTH_TOKEN_KEY = "meetogether_access_token";
-const AUTH_USER_KEY = "meetogether_current_user";
-
-const initialToken =
-  typeof window !== "undefined" ? localStorage.getItem(AUTH_TOKEN_KEY) : null;
+import { apiRequest, setAccessToken, clearAccessToken } from "../lib/api";
 
 export const signUpUser = createAsyncThunk(
   "auth/signUpUser",
@@ -104,7 +98,7 @@ export const logOutUser = createAsyncThunk(
 const authSlice = createSlice({
   name: "auth",
   initialState: {
-    accessToken: initialToken,
+    accessToken: null,
     currentUser: null,
     status: "idle",
     initialized: false,
@@ -121,7 +115,6 @@ const authSlice = createSlice({
       }
 
       state.currentUser.avatar = action.payload;
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(state.currentUser));
     },
     mergeCurrentUser: (state, action) => {
       if (!state.currentUser) {
@@ -132,7 +125,6 @@ const authSlice = createSlice({
         ...state.currentUser,
         ...action.payload,
       };
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(state.currentUser));
     },
     clearAuthState: (state) => {
       state.accessToken = null;
@@ -141,8 +133,7 @@ const authSlice = createSlice({
       state.error = null;
       state.initialized = true;
       state.needsSessionRefresh = false;
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      localStorage.removeItem(AUTH_USER_KEY);
+      clearAccessToken();
     },
   },
   extraReducers: (builder) => {
@@ -157,11 +148,7 @@ const authSlice = createSlice({
         state.currentUser = action.payload.user;
         state.initialized = true;
         state.needsSessionRefresh = false;
-        localStorage.setItem(AUTH_TOKEN_KEY, action.payload.accessToken);
-        localStorage.setItem(
-          AUTH_USER_KEY,
-          JSON.stringify(action.payload.user),
-        );
+        setAccessToken(action.payload.accessToken);
       })
       .addCase(signUpUser.rejected, (state, action) => {
         state.status = "failed";
@@ -177,11 +164,7 @@ const authSlice = createSlice({
         state.currentUser = action.payload.user;
         state.initialized = true;
         state.needsSessionRefresh = false;
-        localStorage.setItem(AUTH_TOKEN_KEY, action.payload.accessToken);
-        localStorage.setItem(
-          AUTH_USER_KEY,
-          JSON.stringify(action.payload.user),
-        );
+        setAccessToken(action.payload.accessToken);
       })
       .addCase(signInUser.rejected, (state, action) => {
         state.status = "failed";
@@ -196,15 +179,10 @@ const authSlice = createSlice({
         state.accessToken = action.payload?.accessToken ?? null;
         state.initialized = true;
         state.needsSessionRefresh = false;
-        if (action.payload?.accessToken && action.payload?.user) {
-          localStorage.setItem(AUTH_TOKEN_KEY, action.payload.accessToken);
-          localStorage.setItem(
-            AUTH_USER_KEY,
-            JSON.stringify(action.payload.user),
-          );
+        if (action.payload?.accessToken) {
+          setAccessToken(action.payload.accessToken);
         } else {
-          localStorage.removeItem(AUTH_TOKEN_KEY);
-          localStorage.removeItem(AUTH_USER_KEY);
+          clearAccessToken();
         }
       })
       .addCase(restoreSession.rejected, (state) => {
@@ -214,8 +192,7 @@ const authSlice = createSlice({
         state.initialized = true;
         state.needsSessionRefresh = false;
         state.error = null;
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-        localStorage.removeItem(AUTH_USER_KEY);
+        clearAccessToken();
       })
       .addCase(logOutUser.fulfilled, (state) => {
         state.accessToken = null;
@@ -224,8 +201,7 @@ const authSlice = createSlice({
         state.error = null;
         state.initialized = true;
         state.needsSessionRefresh = false;
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-        localStorage.removeItem(AUTH_USER_KEY);
+        clearAccessToken();
       });
   },
 });

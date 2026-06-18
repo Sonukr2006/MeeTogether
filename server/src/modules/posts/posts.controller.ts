@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { CurrentUser } from 'src/common/decorators/current-user.decorator';
+import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { VerifiedAccountGuard } from '../auth/guards/verified-account.guard';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
@@ -13,13 +14,16 @@ export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
   @Get()
-  async getFeedPosts() {
-    return this.postsService.getFeedPosts();
+  async getFeedPosts(@Query() query: CursorPaginationDto) {
+    return this.postsService.getFeedPosts(query);
   }
 
   @Get(':postId/comments')
-  async getComments(@Param('postId') postId: string) {
-    return this.postsService.getComments(postId);
+  async getComments(
+    @Param('postId') postId: string,
+    @Query() query: CursorPaginationDto,
+  ) {
+    return this.postsService.getComments(postId, query);
   }
 
   @UseGuards(JwtAuthGuard, VerifiedAccountGuard)

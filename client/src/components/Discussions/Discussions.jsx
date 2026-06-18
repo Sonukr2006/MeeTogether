@@ -175,9 +175,10 @@ const Discussions = () => {
 
       try {
         setIsThreadsLoading(true);
-        const data = await apiRequest(`/projects/${selectedProjectId}/threads`);
+        const response = await apiRequest(`/projects/${selectedProjectId}/threads`);
+        const data = response?.data ?? (Array.isArray(response) ? response : []);
 
-        if (!ignore && Array.isArray(data)) {
+        if (!ignore) {
           setThreadsErrorByProject((prev) => ({
             ...prev,
             [selectedProjectId]: "",
@@ -230,9 +231,10 @@ const Discussions = () => {
 
       try {
         setIsMessagesLoading(true);
-        const data = await apiRequest(`/threads/${activeThread.id}/messages`);
+        const response = await apiRequest(`/threads/${activeThread.id}/messages`);
+        const data = response?.data ?? (Array.isArray(response) ? response : []);
 
-        if (!ignore && Array.isArray(data)) {
+        if (!ignore) {
           setMessagesErrorByThread((prev) => ({
             ...prev,
             [activeThread.id]: "",
