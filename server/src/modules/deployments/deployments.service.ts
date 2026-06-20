@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { CursorPaginationDto } from 'src/common/dto/cursor-pagination.dto';
+import { PaginatedResponse } from 'src/common/interfaces/paginated-response.interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 const deploymentInclude = {
@@ -40,10 +42,30 @@ type DeploymentRow = {
 export class DeploymentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getDeployments() {
+  async getDeployments(query?: CursorPaginationDto): Promise<PaginatedResponse<{
+    id: string;
+    projectId: string;
+    title: string;
+    status: { label: DeploymentStatusLabel; note: string };
+    updatedAt: string;
+    environment: string;
+    liveUrl: string | null;
+    repoUrl: string | null;
+    progress: number;
+    buildHealth: string;
+    milestone: string;
+    stack: string[];
+    mentorStatus: string;
+  }>> {
+    const limit = Math.min(query?.limit ?? 20, 50);
+    const cursor = query?.cursor;
+
     const prisma = this.prisma as PrismaService & {
       deployment: {
         findMany(args: {
+          take: number;
+          skip?: number;
+          cursor?: { id: string };
           include: typeof deploymentInclude;
           orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }];
         }): Promise<DeploymentRow[]>;
@@ -51,11 +73,16 @@ export class DeploymentsService {
     };
 
     const deployments = await prisma.deployment.findMany({
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: deploymentInclude,
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
-    return deployments.map((deployment) => ({
+    const hasMore = deployments.length > limit;
+    const data = hasMore ? deployments.slice(0, limit) : deployments;
+
+    const mapped = data.map((deployment) => ({
       id: deployment.id,
       projectId: deployment.projectId,
       title: deployment.project.title,
@@ -73,6 +100,16 @@ export class DeploymentsService {
       stack: deployment.project.techTags.map((tag) => tag.value),
       mentorStatus: deployment.project.mentorStatus ?? 'Mentor status not set',
     }));
+
+    const nextCursor = hasMore ? mapped[mapped.length - 1].id : null;
+
+    return {
+      data: mapped,
+      pagination: {
+        nextCursor,
+        hasMore,
+      },
+    };
   }
 
   private toUiStatus(status: DeploymentStatus): DeploymentStatusLabel {

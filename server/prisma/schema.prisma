@@ -95,6 +95,7 @@ model Session {
 
   @@index([userId])
   @@index([tokenFamilyId])
+  @@index([refreshTokenHash])
 }
 
 model ProofProfile {
@@ -186,6 +187,7 @@ model Project {
   comments      ProjectComment[]
 
   @@index([ownerUserId])
+  @@index([createdAt(sort: Desc)])
 }
 
 model Issue {
@@ -327,6 +329,9 @@ model Request {
   @@index([toUserId])
   @@index([relatedProjectId])
   @@index([relatedThreadId])
+  @@index([toUserId, status, createdAt])
+  @@index([fromUserId, createdAt])
+  @@index([fromUserId, toUserId, type, status])
 }
 
 model Deployment {
@@ -370,6 +375,7 @@ model Post {
   @@index([authorUserId, createdAt])
   @@index([projectId, createdAt])
   @@index([type, createdAt])
+  @@index([createdAt(sort: Desc)])
 }
 
 model PostComment {

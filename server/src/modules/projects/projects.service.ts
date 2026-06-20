@@ -1,5 +1,7 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
+import { CursorPaginationDto } from "src/common/dto/cursor-pagination.dto";
+import { PaginatedResponse } from "src/common/interfaces/paginated-response.interface";
 import { TtlCache } from "src/common/utils/ttl-cache";
 import { LikesService } from "../likes/likes.service";
 import { PrismaService } from "src/prisma/prisma.service";
@@ -69,9 +71,6 @@ type ProjectCommentWithAuthor = Prisma.ProjectCommentGetPayload<{
 
 @Injectable()
 export class ProjectsService {
-  private readonly projectsListCache = new TtlCache<
-    ReturnType<ProjectsService["toProjectSummary"]>[]
-  >(30_000);
   private readonly projectDetailCache = new TtlCache<
     ReturnType<ProjectsService["toProjectDetail"]>
   >(30_000);
@@ -86,13 +85,12 @@ export class ProjectsService {
     private readonly likesService: LikesService,
   ) {}
 
-  async getProjects() {
-    const cached = this.projectsListCache.get("all");
-    if (cached) {
-      return cached;
-    }
+  async getProjects(query: CursorPaginationDto = {}): Promise<PaginatedResponse<ReturnType<ProjectsService["toProjectSummary"]>>> {
+    const limit = Math.min(query.limit ?? 20, 50);
 
     const projects = await this.prisma.project.findMany({
+      take: limit + 1,
+      ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
       include: {
         owner: projectInclude.owner,
         techTags: projectInclude.techTags,
@@ -109,14 +107,22 @@ export class ProjectsService {
       },
     });
 
-    const summaries = projects.map((project) =>
+    const hasMore = projects.length > limit;
+    const data = hasMore ? projects.slice(0, limit) : projects;
+    const summaries = data.map((project) =>
       this.toProjectSummary(
         project as ProjectWithRelations & { _count: { members: number } },
       ),
     );
+    const nextCursor = hasMore ? data[data.length - 1].id : null;
 
-    this.projectsListCache.set("all", summaries);
-    return summaries;
+    return {
+      data: summaries,
+      pagination: {
+        nextCursor,
+        hasMore,
+      },
+    };
   }
 
   async createProject(userId: string, createProjectDto: CreateProjectDto) {
@@ -212,7 +218,6 @@ export class ProjectsService {
       };
     });
 
-    this.projectsListCache.clear();
     this.projectDetailCache.clear(created.id);
 
     return created;
@@ -238,11 +243,8 @@ export class ProjectsService {
     return detail;
   }
 
-  async getComments(projectId: string) {
-    const cached = this.projectCommentsCache.get(projectId);
-    if (cached) {
-      return cached;
-    }
+  async getComments(projectId: string, dto?: CursorPaginationDto): Promise<PaginatedResponse<ReturnType<ProjectsService['toProjectComment']>>> {
+    const limit = Math.min(dto?.limit ?? 30, 50);
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -257,11 +259,18 @@ export class ProjectsService {
       where: { projectId },
       include: projectCommentInclude,
       orderBy: [{ createdAt: "asc" }],
+      take: limit + 1,
+      ...(dto?.cursor ? { cursor: { id: dto.cursor }, skip: 1 } : {}),
     });
 
-    const mapped = comments.map((comment) => this.toProjectComment(comment));
-    this.projectCommentsCache.set(projectId, mapped);
-    return mapped;
+    const hasMore = comments.length > limit;
+    const data = hasMore ? comments.slice(0, limit) : comments;
+    const nextCursor = hasMore ? data[data.length - 1].id : null;
+
+    return {
+      data: data.map((comment) => this.toProjectComment(comment)),
+      pagination: { nextCursor, hasMore },
+    };
   }
 
   async createComment(projectId: string, userId: string, message: string) {
@@ -303,7 +312,6 @@ export class ProjectsService {
     });
 
     this.projectCommentsCache.clear(projectId);
-    this.projectsListCache.clear();
     this.projectDetailCache.clear(projectId);
 
     return {
@@ -358,21 +366,16 @@ export class ProjectsService {
           where: { id: existing.id },
         });
 
-        const updated = await tx.project.update({
+        await tx.$executeRaw`UPDATE "Project" SET "likesCount" = GREATEST("likesCount" - 1, 0), "updatedAt" = NOW() WHERE id = ${projectId} AND "likesCount" > 0`;
+
+        const current = await tx.project.findUniqueOrThrow({
           where: { id: projectId },
-          data: {
-            likesCount: {
-              decrement: 1,
-            },
-          },
-          select: {
-            likesCount: true,
-          },
+          select: { likesCount: true },
         });
 
         return {
           liked: false,
-          likesCount: Math.max(0, updated.likesCount),
+          likesCount: current.likesCount,
         };
       }
 
@@ -425,7 +428,6 @@ export class ProjectsService {
       };
     });
 
-    this.projectsListCache.clear();
     this.projectDetailCache.clear(projectId);
 
     return {

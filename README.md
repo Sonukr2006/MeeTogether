@@ -310,16 +310,32 @@ npm run lint
 npm run preview
 ```
 
+## Running backend production checks
+
+From the `server` folder:
+
+```bash
+npm run lint
+npm run build
+npx prisma validate
+```
+
+Discussion integration tests require an isolated Postgres database:
+
+```bash
+TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/meetogether_test?schema=public" npm run test:integration
+```
+
 ## Current limitations
 
-This version is still prototype-heavy.
+This version is still production-hardening in progress.
 
 Known limitations:
 
-- project, profile, and discussion data are mocked
-- no backend persistence yet
-- auth user is still effectively hardcoded in several flows
-- requests and interactions are session-level frontend state
+- the NestJS/Prisma backend exists, but many routes still need pagination, permission tests, monitoring, and operational hardening
+- parts of the frontend still rely on mocked or session-level state
+- auth user handling still needs full end-to-end integration across all flows
+- request/profile/project/discussion workflows need broader automated coverage before launch
 - discussion system is UI-valid but not yet real-time
 
 ## What should come next
@@ -346,4 +362,3 @@ to:
 `who can prove they built, collaborated, discussed, shipped, and improved`
 
 That makes it useful not only as a portfolio, but as a trust system.
-

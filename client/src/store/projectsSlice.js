@@ -8,7 +8,8 @@ export const fetchProjects = createAsyncThunk(
   "projects/fetchProjects",
   async () => {
     const response = await apiRequest("/projects");
-    return Array.isArray(response) ? response.map(mapApiProjectToCard) : [];
+    const items = response?.data ?? (Array.isArray(response) ? response : []);
+    return items.map(mapApiProjectToCard);
   },
   {
     condition: (_, { getState }) => {

@@ -47,8 +47,8 @@ These must be fixed before a real public launch.
 | `Not started` | Stop storing access tokens in `localStorage`; move toward memory-only access token handling plus refresh-cookie rotation. |
 | `Not started` | Make production email delivery fail closed. Verification/reset emails must not silently fall back to console logging in production. |
 | `Partial` | Fix all lint errors in server and client. Server lint now passes and is a CI gate; client lint still fails on existing React/unused-variable issues. |
-| `Not started` | Add automated tests for auth, permissions, discussions, requests, uploads, pagination, and session revocation. |
-| `Not started` | Update the root `README.md` so it matches the current NestJS/Prisma backend reality instead of describing only a frontend-first mocked prototype. |
+| `Partial` | Add automated tests for auth, permissions, discussions, requests, uploads, pagination, and session revocation. Server integration test setup now covers discussion message concurrency and non-member write denial; broad auth, request, upload, pagination, and session tests are still missing. |
+| `Partial` | Update the root `README.md` so it matches the current NestJS/Prisma backend reality instead of describing only a frontend-first mocked prototype. Backend checks and current limitations are now documented; the full product overview still needs a deeper refresh. |
 | `Not started` | Add production error monitoring and alerting. |
 | `Not started` | Confirm backups and tested restore process. |
 | `Not started` | Create a staging environment and smoke-test checklist. |
@@ -62,7 +62,7 @@ These must be fixed before a real public launch.
 | Authorization | `Partial` | Requests and discussions now have stronger route guards and resource-level checks, but issues, deployments, uploads, and broader permission tests are still missing. |
 | Projects | `Partial` | Create/read/like/save/comment exist, but pagination, edit APIs, visibility rules, and permission tests are missing. |
 | Posts/feed | `Partial` | Create/read/like/comment exist, but feed pagination, edit/delete policy, moderation, and URL safety need hardening. |
-| Discussions | `Partial` | Thread/message reads require verified auth and project visibility checks, and message posting is owner/member/creator scoped; pagination, tests, and sequence concurrency safety are still missing. |
+| Discussions | `Partial` | Thread/message reads require verified auth and project visibility checks, message posting is owner/member/creator scoped, and message sequence writes retry on unique conflicts with integration coverage; pagination and broader permission tests are still missing. |
 | Issues | `Partial` | Read API exists, but create/update/assign workflows and permissions are missing. |
 | Requests | `Partial` | Received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read are authenticated and user-scoped. Duplicate active requests, cancel/status races, unbounded inbox/sent reads, and basic request-creation spam are now guarded, but frontend create/cancel wiring, tests, monitoring, and tuning are missing. |
 | Profiles/proof resume | `Partial` | Profile read/update exists, but public/private response tests, pagination, proof-source rules, and resume backend contract need work. |
@@ -70,7 +70,7 @@ These must be fixed before a real public launch.
 | Database scalability | `Partial` | Prisma schema has useful relations and some indexes, but pagination and several hot-path indexes are missing. |
 | Rate limiting | `Partial` | Auth limits exist, but production fallback behavior and broader abuse limits are not launch-grade. |
 | Observability | `Partial` | Request IDs and JSON logs exist, but structured logger, error monitoring, metrics, and readiness checks are incomplete. |
-| Tests/CI | `Partial` | GitHub Actions now runs server install, Prisma schema validation, server lint, server build, client install, and client build on push, pull request, and manual dispatch. Client lint still fails and production-critical test coverage is missing. |
+| Tests/CI | `Partial` | GitHub Actions now runs server install, Prisma schema validation, test database migrations, server lint, discussion integration tests, server build, client install, and client build on push, pull request, and manual dispatch. Client lint still fails and broader production-critical test coverage is missing. |
 | Operations | `Not started` | Staging, backups, restore test, runbooks, rollback process, and monitoring need to be established. |
 | Documentation | `Partial` | Production README exists, but root README and older docs still need alignment with the current backend and launch model. |
 
@@ -122,13 +122,13 @@ These must be fixed before a real public launch.
 
 ### Discussions
 
-- [ ] `Partial` Require auth for thread/message reads unless a thread is explicitly public-read. Backend now requires verified auth and checks project visibility for thread lists and messages; pagination and tests are still missing.
-- [ ] `Partial` Enforce project membership or allowed participant status before message creation. Backend now allows posting only for thread creator, project owner, or project member; tests and explicit participant roles are still missing.
+- [ ] `Partial` Require auth for thread/message reads unless a thread is explicitly public-read. Backend now requires verified auth and checks project visibility for thread lists and messages; pagination and read-path tests are still missing.
+- [ ] `Partial` Enforce project membership or allowed participant status before message creation. Backend now allows posting only for thread creator, project owner, or project member; integration coverage verifies member success and public-thread non-member denial, but explicit participant roles and full permission matrix tests are still missing.
 - [ ] `Not started` Add cursor pagination for thread messages with a default page size of 30 to 50.
-- [ ] `Not started` Fix sequence-number race risk by using a transaction or database-safe sequence strategy.
+- [x] `Done` Fix sequence-number race risk by using a transaction or database-safe sequence strategy. Message creation now writes in a transaction, retries bounded unique-sequence conflicts, and has integration coverage for concurrent sends.
 - [ ] `Partial` Add edit/delete fields and policy if message editing becomes launch scope.
 - [ ] `Partial` Keep one default thread per project for launch, but verify this with tests and make thread creation idempotent.
-- [ ] `Not started` Add tests for non-member read/write denial, member write success, and read-state updates.
+- [ ] `Partial` Add tests for non-member read/write denial, member write success, and read-state updates. Integration coverage now verifies public-thread non-member write denial and member concurrent write success; read denial and read-state update tests are still missing.
 
 ### Issues
 
@@ -185,12 +185,12 @@ These must be fixed before a real public launch.
 
 ### Testing And CI
 
-- [ ] `Not started` Add server unit and integration test setup.
+- [ ] `Partial` Add server unit and integration test setup. Node test-runner integration setup exists for database-backed service tests; unit test conventions and broader coverage are still missing.
 - [ ] `Not started` Add client component and integration test setup for auth and core flows.
 - [ ] `Not started` Add e2e smoke tests for signup, login, create project, post discussion message, save project, and request inbox.
 - [x] `Done` Make `npm run lint` pass in server.
 - [ ] `Not started` Make `npm run lint` pass in client.
-- [ ] `Partial` Make server build, client build, lint, tests, Prisma generate, and migrations required CI gates. GitHub Actions now gates server build, server lint, client build, and Prisma schema validation; client lint, tests, Prisma generate, and migration deploy checks are still missing.
+- [ ] `Partial` Make server build, client build, lint, tests, Prisma generate, and migrations required CI gates. GitHub Actions now gates server build, server lint, server integration tests, test database migrations, client build, and Prisma schema validation; client lint and Prisma generate checks are still missing.
 - [ ] `Partial` Add production cookie/session config test to CI.
 - [ ] `Not started` Add permission matrix tests as release blockers.
 
@@ -225,7 +225,7 @@ This section names current code areas that need hardening before production.
 - `server/src/modules/requests/requests.controller.ts` now guards received inbox reads, sent-request reads, request creation, sender-only cancel, recipient status updates, and mark-all-read, but still needs abuse limits and tests.
 - `server/src/modules/requests/requests.service.ts` now scopes request reads and writes to the authenticated sender or recipient, rejects self/duplicate active requests, validates related project/thread access, paginates inbox/sent reads, limits request creation abuse, and prevents status changes after cancel/terminal states with conditional writes, but still needs transition-policy tests, abuse-limit tests, and production tuning.
 - `server/src/modules/discussions/discussions.controller.ts` now requires verified auth for thread lists, thread messages, message creation, and read-state updates.
-- `server/src/modules/discussions/discussions.service.ts` now enforces project visibility for reading and owner/member/thread-creator rules for posting, but still needs pagination, sequence race fixes, and permission tests.
+- `server/src/modules/discussions/discussions.service.ts` now enforces project visibility for reading, owner/member/thread-creator rules for posting, and bounded retry for message sequence conflicts with integration coverage, but still needs pagination plus broader read/write permission tests.
 - `server/src/modules/issues/issues.controller.ts` exposes issues without auth even though docs define issue reads as authenticated by default.
 - `server/src/modules/deployments/deployments.controller.ts` exposes all deployments without visibility checks.
 - Permission logic is not centralized yet, which will become hard to maintain as routes grow.
@@ -243,7 +243,7 @@ This section names current code areas that need hardening before production.
 
 ### Reliability
 
-- `server/src/modules/discussions/discussions.service.ts` uses message count plus one for `sequenceNumber`; concurrent sends can race.
+- `server/src/modules/discussions/discussions.service.ts` now retries unique message sequence conflicts and has integration coverage for concurrent sends; heavier load testing is still needed before launch.
 - Like queue processing in `server/src/modules/posts/posts.service.ts` and `server/src/modules/projects/projects.service.ts` is in-process and only processes a small batch per trigger.
 - Cache invalidation is manual and easy to miss as write APIs expand.
 - There is no background cleanup for expired sessions, orphaned uploaded files, or expired upload targets.
@@ -296,3 +296,92 @@ MeeTogether can be called production-ready only when:
 - production rate limiting is backed by shared infrastructure
 - logs, errors, health, readiness, backups, and rollback are operational
 - staging smoke tests pass before production deploy
+
+## Critical Bugs And Edge Cases Found In Code Review
+
+This section documents bugs, edge cases, and security issues found through code-level inspection that were not previously captured in this checklist.
+
+### Critical Security Bugs
+
+| Severity | Location | Issue |
+| --- | --- | --- |
+| `Critical` | `server/src/modules/auth/auth.service.ts` signup response | Signup returns `verification.token` in the response body in non-production environments. This raw token could be leaked through browser dev-tools, client logs, or intercepting proxies in staging. If `NODE_ENV` is misconfigured or missing in any deployed environment, verification tokens get exposed. |
+| `Critical` | `server/src/modules/auth/auth.service.ts` forgotPassword response | Same issue: `reset.token` is included in the `forgotPassword` response in non-production mode. A single env misconfiguration leaks password reset tokens. |
+| `Critical` | `server/src/modules/auth/auth.service.ts` resendVerification response | Same pattern: returns raw verification token in response. Combined with missing rate limit on this endpoint, an attacker could call resend repeatedly and get fresh tokens in response. |
+| `Critical` | `server/src/modules/storage/storage.service.ts` ownership bypass | Upload target uses `createUploadTargetDto.entityId` directly to build S3 keys like `projects/{entityId}/cover/...` without verifying the authenticated user owns or can edit that project/post. Any authenticated user can mint upload URLs for other users' resources and overwrite their media. |
+| `Critical` | `client/src/store/authSlice.js` | User object is stored in `localStorage` as `meetogether_current_user`. This persists email, username, and profile data in a location vulnerable to XSS. Combined with the access token in localStorage, a single XSS vulnerability gives full account takeover. |
+| `High` | `server/src/modules/auth/auth.service.ts` refresh | `Session.refreshTokenHash` has no database index. Refresh/logout queries do `findFirst({ where: { refreshTokenHash } })` which results in a full table scan. With many sessions, this becomes both a performance bottleneck and a DoS vector. |
+| `High` | `server/src/modules/auth/auth.service.ts` CSRF validation | CSRF validation compares the header token to the cookie token using `timingSafeEqual`, then hashes the header value and compares to the stored session hash. However, if the session has no `csrfTokenHash` (null), the entire validation is skipped. Old sessions created before CSRF was added bypass CSRF protection entirely. |
+| `High` | `server/src/modules/email/email.service.ts` | When `EMAIL_PROVIDER=resend` but `RESEND_API_KEY` is missing, the service silently falls back to `console` provider. In production this means verification/reset emails are never sent, users cannot verify accounts, but the API returns success — creating a broken state invisible to the user and operator. |
+| `High` | Rate limit in-memory map never evicts | `rate-limit.middleware.ts` stores buckets in a `Map` that never evicts expired entries. Under sustained traffic, memory grows unbounded. This is a slow memory leak that causes eventual OOM in long-running production processes. |
+
+### Logical Bugs And Edge Cases
+
+| Severity | Location | Issue |
+| --- | --- | --- |
+| `High` | `server/src/modules/posts/posts.service.ts` likesCount drift | `Math.max(0, updated.likesCount)` prevents negative display but the actual DB column can go negative if concurrent unlikes race. The schema uses `Int @default(0)` with no constraint >= 0. This can cause likesCount to drift to -1 or lower, requiring manual repair. Same bug exists in `projects.service.ts`. |
+| `High` | `server/src/modules/discussions/discussions.service.ts` cache serves stale data to wrong user | Discussion thread cache key is `${projectId}:${userId}`, but `getMessagesForThread` uses only `threadId` as cache key without userId. This means User A's read creates a cached version, and User B gets the same cached messages even if their permission context differs or they should see different unread state. |
+| `Medium` | `server/src/modules/auth/auth.service.ts` ensureTrustedOrigin | If `origin` header is absent (non-browser clients, Postman, curl, native apps), origin check is silently skipped. This means CSRF protection for refresh/logout depends entirely on the cookie+header mechanism and the origin check provides no real protection for API-only callers. |
+| `Medium` | `server/src/modules/discussions/discussions.service.ts` unread increment race | `updateMany` with `increment: 1` on other participants' `unreadCountSnapshot` can race with `markThreadRead` setting it to 0. If markThreadRead runs between the message create and the increment, the user gets unreadCount=1 despite having just marked-read. |
+| `Medium` | `server/src/modules/projects/projects.service.ts` create missing category | `CreateProjectDto` in docs mentions `category` field, but the `Project` model in Prisma has no `category` column. If the DTO accepts `category`, it's silently dropped. If it doesn't, the product spec for categorized discovery is broken. |
+| `Medium` | `server/src/modules/profiles/profiles.service.ts` savedProjects privacy | `getProfileByUsername` only returns saved projects if `viewerUserId === user.id`, which is correct. However, the `profileCache` caches the response without viewer context for public views (when `viewerUserId` is undefined). If a profile is first loaded by its owner, the cached version (with savedProjects) could leak if the cache key logic had different ordering. Current implementation avoids this only because owner views skip cache — but any refactor that changes this order will create a privacy leak. |
+| `Medium` | `server/src/modules/auth/guards/verified-account.guard.ts` DB query on every request | `VerifiedAccountGuard` queries the database on every request to check `emailVerified`. Since this guard is used on most write routes, this adds one extra DB query per authenticated request. At scale, this multiplies total queries significantly. The JWT payload or a cached user lookup should be used instead. |
+| `Medium` | `server/src/modules/auth/strategies/jwt.strategy.ts` DB queries on every request | `JwtStrategy.validate` queries both `User` and `Session` tables on every request. Combined with `VerifiedAccountGuard`, each protected endpoint makes 3 DB queries before business logic even starts. This will severely impact p95 latency at scale. |
+| `Low` | `server/src/common/utils/ttl-cache.ts` | Cache never proactively evicts expired entries. Entries only get cleaned on `get()`. Large datasets can sit in memory after TTL expires until their key is explicitly requested again. Under high cardinality (e.g., per-user thread cache), memory accumulates. |
+| `Low` | `server/src/modules/deployments/deployments.service.ts` unsafe type assertion | The service casts `prisma` to an unsafe type to access `prisma.deployment`. If the `Deployment` model is renamed or restructured, this will fail silently at compile time and crash at runtime. |
+
+### Missing Production Safeguards
+
+| Severity | Location | Issue |
+| --- | --- | --- |
+| `High` | `server/src/modules/posts/posts.controller.ts` | `GET /posts` (feed) and `GET /posts/:postId/comments` have no auth guard. These are public, which may be intentional for discovery. But `POST /posts/:postId/like` and `POST /posts/:postId/comments` use `VerifiedAccountGuard` — if the feed is public, anonymous comment reading is fine, but the API contract and visibility model docs say feed is public while comments are ambiguous. |
+| `High` | `server/src/modules/projects/projects.controller.ts` | Same pattern: `GET /projects` and `GET /projects/:projectId` have no auth guard, but `GET /projects/:projectId/comments` also has no guard. This means project comments are fully public-read without authentication, which may leak collaborator conversation context. |
+| `High` | `server/src/modules/auth/auth.controller.ts` resend-verification | No rate limit middleware applied to `POST /auth/resend-verification`. An authenticated user can spam this endpoint indefinitely, triggering unlimited verification emails — potential email bombing if the email provider is active. |
+| `Medium` | `server/src/config/configuration.ts` | `jwt.accessSecret` defaults to empty string `''` if `JWT_ACCESS_SECRET` env var is missing. While `env.validation.ts` should catch this, if validation is bypassed (test mode, manual override), the app would sign JWTs with an empty secret, making all tokens forgeable. |
+| `Medium` | `server/src/config/env.validation.ts` production enforcement | Only `AUTH_COOKIE_DOMAIN` is enforced for production. There is no production-only enforcement for: `REDIS_URL` (rate limiting falls back silently), storage provider configuration, or email provider being non-console. |
+| `Medium` | `server/src/main.ts` | No rate limit on `POST /auth/verify-email` and `POST /auth/reset-password`. An attacker can brute-force token values. Tokens are 32 bytes hex (64 chars) so brute force is impractical, but rate limiting adds defense-in-depth and prevents enumeration. |
+| `Medium` | `server/src/modules/posts/posts.service.ts` and `server/src/modules/projects/projects.service.ts` | No message/comment length validation at service level. If DTOs don't enforce `@MaxLength`, users can submit extremely large comments or post bodies, growing DB storage uncontrolled. |
+| `Low` | `server/src/common/middleware/rate-limit.middleware.ts` | Redis client on error/end sets `redisClient = null`, but there's no reconnection logic. Once Redis disconnects, rate limiting permanently falls back to in-memory for the lifetime of that process. |
+| `Low` | `server/src/modules/auth/auth.service.ts` | `req.ip` can be undefined with misconfigured proxies. While `trust proxy` is set, if the client doesn't send `X-Forwarded-For`, session `ipAddress` is stored as `undefined`. This makes session audit unreliable. |
+
+### Schema Missing Indexes (Production Blockers For Scale)
+
+| Table | Missing Index | Why Needed |
+| --- | --- | --- |
+| `Session` | `refreshTokenHash` | Refresh and logout query by this field with no index — full table scan. |
+| `Request` | `[fromUserId, toUserId, type, relatedProjectId, relatedThreadId, status]` (partial composite) | Duplicate active request check does a multi-field query with no composite index. |
+| `Request` | `[toUserId, unread, createdAt]` | Inbox query with unread filter scans all user requests without composite support. |
+| `Request` | `[fromUserId, createdAt]` | Rate limit check counts recent sender requests without composite support. |
+| `Post` | `[createdAt desc]` | Feed endpoint returns posts ordered by `createdAt desc` but existing index is `[authorUserId, createdAt]` — feed scan uses no index. |
+| `Project` | `[createdAt desc]` | Same pattern: project listing ordered by `createdAt desc` has no covering index. |
+
+### Frontend Security Issues
+
+| Severity | Location | Issue |
+| --- | --- | --- |
+| `High` | `client/src/lib/api.js` | Access token stored in `localStorage` is accessible to any XSS payload. Combined with user data also in localStorage, a single XSS gives full session hijack. |
+| `Medium` | `client/src/lib/api.js` | Refresh token retry has no retry-count cap beyond the single `isRetry` flag. If the server returns 401 on the retry, it stops — but there's a potential infinite loop if multiple concurrent requests all trigger refresh simultaneously. The `isRefreshingToken` mutex helps but the deduplication window is not foolproof under rapid navigation. |
+| `Medium` | `client/src/store/authSlice.js` | `restoreSession` thunk calls `/auth/refresh` with POST but does not attach the CSRF header through the normal `apiRequest` path because it passes explicit headers. The `withCsrfHeader` utility in `api.js` handles this, but only because `apiRequest` applies it implicitly. If `restoreSession` ever bypasses `apiRequest`, CSRF validation would fail. |
+| `Low` | `client/src/lib/api.js` uploadFileToStorageTarget | Supabase signed upload uses `formData.append("", file)` with empty string key. This relies on Supabase's specific upload API behavior and will break if they change their form-data field expectations. |
+
+## Updated Production Blocker Summary
+
+Adding newly discovered items to the production blocker table:
+
+| Status | Task |
+| --- | --- |
+| `Not started` | Add index on `Session.refreshTokenHash` to prevent full table scans on refresh/logout. |
+| `Not started` | Remove raw token preview from auth response bodies. Even in development, tokens in HTTP responses risk accidental exposure through logging, proxies, or client-side tracking. Use a separate admin/debug endpoint if token inspection is needed. |
+| `Not started` | Add rate limit on `POST /auth/resend-verification` to prevent email bombing. |
+| `Not started` | Add rate limit on `POST /auth/verify-email` and `POST /auth/reset-password` for brute-force defense. |
+| `Not started` | Fix in-memory rate limit bucket map to evict expired entries (prevent memory leak). |
+| `Not started` | Enforce production-mode env validation for `REDIS_URL`, email provider != console, and storage provider configuration. |
+| `Not started` | Add `@MaxLength` validation to comment/message DTOs to prevent unbounded DB growth. |
+| `Not started` | Fix `VerifiedAccountGuard` to use cached/JWT-embedded emailVerified state instead of DB query per request. |
+| `Not started` | Reduce per-request DB overhead: cache session validation or include session state in JWT claims with short TTL. |
+| `Not started` | Add composite indexes for Request duplicate checks, inbox queries, and rate limit counts. |
+| `Not started` | Add standalone `[createdAt desc]` indexes for Post and Project feed queries. |
+| `Not started` | Fix discussion message cache to include userId in cache key to prevent cross-user stale data. |
+| `Not started` | Add upload target ownership validation so users cannot mint media paths for projects/posts they do not own. |
+| `Not started` | Add Redis reconnection logic to rate limit middleware so a transient disconnect does not permanently degrade to in-memory. |
+| `Not started` | Add database constraint or application guard to prevent `likesCount` from going negative. |

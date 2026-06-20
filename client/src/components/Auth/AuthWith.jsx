@@ -1,4 +1,3 @@
-import React from 'react'
 import { FaGithub, FaGoogle } from "react-icons/fa";
 import { PiDotsSixBold } from "react-icons/pi";
 import { useAlert } from '../../contexts/AlertProvider';

@@ -220,7 +220,7 @@ export default function PostCard({ post, prioritizeImage = false }) {
                   if (typeof result.likesCount === "number") {
                     dispatch(updatePostLikeState(result));
                   }
-                } catch (error) {
+                } catch {
                   dispatch(setPostLikedState({ postId: post.id, liked }));
                   dispatch(adjustPostLikeState({ postId: post.id, delta: -delta }));
                 }

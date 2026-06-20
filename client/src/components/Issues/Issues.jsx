@@ -54,8 +54,9 @@ export default function Issues() {
 
       try {
         const response = await apiRequest("/issues");
-        if (isMounted && Array.isArray(response)) {
-          setIssues(response);
+        const items = response?.data ?? (Array.isArray(response) ? response : []);
+        if (isMounted) {
+          setIssues(items);
         }
       } catch {
         if (isMounted) {

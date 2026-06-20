@@ -30,7 +30,7 @@ export class CreatePostDto {
 
   @IsString()
   @MinLength(20)
-  @MaxLength(4000)
+  @MaxLength(10000)
   description!: string;
 
   @IsOptional()

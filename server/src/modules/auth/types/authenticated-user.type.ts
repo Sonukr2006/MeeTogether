@@ -3,4 +3,5 @@ export type AuthenticatedUser = {
   sid?: string;
   username: string;
   email: string;
+  emailVerified: boolean;
 };

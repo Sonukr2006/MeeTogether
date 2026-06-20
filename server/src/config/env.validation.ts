@@ -157,5 +157,40 @@ export function validateEnv(config: Record<string, unknown>) {
     throw new Error('AUTH_COOKIE_DOMAIN must be set in production to ensure cookies are scoped correctly');
   }
 
+  // Additional production-only checks
+  if (nodeEnv === 'production') {
+    const productionErrors: string[] = [];
+
+    // Redis is required for production rate limiting
+    const redisUrl = config['REDIS_URL'] as string | undefined;
+    if (!redisUrl || redisUrl.trim() === '') {
+      productionErrors.push('REDIS_URL is required in production for rate limiting');
+    }
+
+    // Non-console email provider required
+    const emailProvider = config['EMAIL_PROVIDER'] as string | undefined;
+    if (!emailProvider || emailProvider === 'console') {
+      productionErrors.push('EMAIL_PROVIDER must be a real provider (e.g., "resend") in production');
+    }
+
+    // JWT secrets must be at least 32 characters
+    const jwtSecret = config['JWT_ACCESS_SECRET'] as string | undefined;
+    if (!jwtSecret || jwtSecret.length < 32) {
+      productionErrors.push('JWT_ACCESS_SECRET must be at least 32 characters in production');
+    }
+
+    // Storage provider required
+    const storageProvider = config['STORAGE_PROVIDER'] as string | undefined;
+    if (!storageProvider) {
+      productionErrors.push('STORAGE_PROVIDER is required in production');
+    }
+
+    if (productionErrors.length > 0) {
+      throw new Error(
+        `Production configuration errors:\n${productionErrors.map((e) => `  - ${e}`).join('\n')}`
+      );
+    }
+  }
+
   return validatedConfig;
 }

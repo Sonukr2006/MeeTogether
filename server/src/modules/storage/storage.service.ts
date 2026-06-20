@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { ConfigService } from '@nestjs/config';
@@ -10,19 +12,35 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 import { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { CreateUploadTargetDto } from './dto/create-upload-target.dto';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class StorageService {
   private s3Client: S3Client | null = null;
   private supabaseClient: SupabaseClient | null = null;
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   async createUploadTarget(
     user: AuthenticatedUser,
     createUploadTargetDto: CreateUploadTargetDto,
   ) {
     this.validateUploadTarget(createUploadTargetDto);
+
+    if (
+      createUploadTargetDto.entityId &&
+      (createUploadTargetDto.entityType === 'project_cover' ||
+        createUploadTargetDto.entityType === 'post_image')
+    ) {
+      await this.validateOwnership(
+        createUploadTargetDto.entityType,
+        createUploadTargetDto.entityId,
+        user.sub,
+      );
+    }
 
     const storageKey = this.buildStorageKey(user.sub, createUploadTargetDto);
     const provider = this.configService.get<'supabase' | 's3'>('storage.provider') ?? 'supabase';
@@ -147,6 +165,28 @@ export class StorageService {
     }
 
     return this.supabaseClient;
+  }
+
+  private async validateOwnership(
+    entityType: 'project_cover' | 'post_image',
+    entityId: string,
+    userId: string,
+  ): Promise<void> {
+    if (entityType === 'project_cover') {
+      const project = await this.prisma.project.findUnique({
+        where: { id: entityId },
+        select: { ownerUserId: true },
+      });
+      if (!project) throw new NotFoundException('Project not found');
+      if (project.ownerUserId !== userId) throw new ForbiddenException('You do not own this project');
+    } else if (entityType === 'post_image') {
+      const post = await this.prisma.post.findUnique({
+        where: { id: entityId },
+        select: { authorUserId: true },
+      });
+      if (!post) throw new NotFoundException('Post not found');
+      if (post.authorUserId !== userId) throw new ForbiddenException('You do not own this post');
+    }
   }
 
   private buildStorageKey(

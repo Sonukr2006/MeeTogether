@@ -15,9 +15,10 @@ export default function Deployments() {
 
       try {
         const response = await apiRequest("/deployments");
-        if (isMounted && Array.isArray(response)) {
+        const items = response?.data ?? (Array.isArray(response) ? response : []);
+        if (isMounted) {
           setDeploymentCards(
-            response.map((deployment) => ({
+            items.map((deployment) => ({
               ...deployment,
               status: {
                 ...deployment.status,
