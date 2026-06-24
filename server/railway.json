@@ -1,7 +1,8 @@
 {
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npx prisma generate && npm run build"
+    "nixpacksConfigPath": "server/nixpacks.toml",
+    "buildCommand": "npx prisma generate && npx nest build"
   },
   "deploy": {
     "startCommand": "npx prisma migrate deploy && node dist/main.js",
