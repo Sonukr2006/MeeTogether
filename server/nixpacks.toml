@@ -1,2 +1,2 @@
 [phases.install]
-cmds = ["cd server && npm ci --include=dev"]
+cmds = ["npm ci --include=dev"]
