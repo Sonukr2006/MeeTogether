@@ -6,7 +6,7 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "nest build",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "npm run test:integration",
     "test:integration": "node scripts/run-integration-tests.js",
