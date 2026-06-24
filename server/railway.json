@@ -1,7 +1,7 @@
 {
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npx prisma generate && npx nest build"
+    "buildCommand": "npx prisma generate && npx tsc -p tsconfig.build.json"
   },
   "deploy": {
     "startCommand": "node dist/main.js",
