@@ -2,11 +2,15 @@
   "name": "meetogether-server",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
-    "start": "node dist/main.js",
+    "start": "node dist/src/main.js",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "build": "nest build",
+    "build:prod": "prisma generate && nest build",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "npm run test:integration",
     "test:integration": "node scripts/run-integration-tests.js",
@@ -19,12 +23,14 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1045.0",
     "@aws-sdk/s3-request-presigner": "^3.1045.0",
+    "@nestjs/cli": "^11.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/passport": "^11.0.3",
     "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/schematics": "^11.0.0",
     "@prisma/client": "^6.7.0",
     "@sentry/node": "^8.0.0",
     "@supabase/supabase-js": "^2.105.4",
@@ -37,13 +43,13 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pino-http": "^10.4.0",
+    "prisma": "^6.7.0",
     "prom-client": "^15.0.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "typescript": "^5.7.2"
   },
   "devDependencies": {
-    "@nestjs/cli": "^11.0.1",
-    "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
     "@types/bcrypt": "^5.0.2",
     "@types/cookie-parser": "^1.4.8",
@@ -55,10 +61,8 @@
     "eslint-plugin-import": "^2.31.0",
     "pino-pretty": "^11.0.0",
     "prettier": "^3.4.2",
-    "prisma": "^6.7.0",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.7.2",
     "typescript-eslint": "^8.59.2"
   }
 }
