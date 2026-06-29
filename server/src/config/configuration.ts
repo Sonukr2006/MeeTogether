@@ -9,7 +9,7 @@ export default () => ({
   },
   auth: {
     cookieDomain: process.env.AUTH_COOKIE_DOMAIN || undefined,
-    cookieSameSite: process.env.AUTH_COOKIE_SAME_SITE ?? 'none',
+    cookieSameSite: process.env.AUTH_COOKIE_SAME_SITE ?? 'lax',
   },
   redisUrl: process.env.REDIS_URL || undefined,
   refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 30),

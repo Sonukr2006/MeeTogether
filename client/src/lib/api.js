@@ -1,5 +1,5 @@
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
+  import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 const AUTH_CSRF_COOKIE_KEY = "mt_csrf_token";
 
 // --- Memory-only token storage (Requirement 3.1, 3.2) ---

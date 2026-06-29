@@ -445,7 +445,7 @@ export class AuthService {
   private getRefreshCookieOptions(expiresAt?: Date): CookieOptions {
     const isProduction = this.configService.get<string>('nodeEnv') === 'production';
     const sameSiteSetting =
-      (this.configService.get<'lax' | 'strict' | 'none'>('auth.cookieSameSite') ?? 'none');
+      (this.configService.get<'lax' | 'strict' | 'none'>('auth.cookieSameSite') ?? 'lax');
     const cookieDomain = this.configService.get<string | undefined>('auth.cookieDomain');
 
     return {
@@ -461,7 +461,7 @@ export class AuthService {
   private getCsrfCookieOptions(expiresAt?: Date): CookieOptions {
     const isProduction = this.configService.get<string>('nodeEnv') === 'production';
     const sameSiteSetting =
-      (this.configService.get<'lax' | 'strict' | 'none'>('auth.cookieSameSite') ?? 'none');
+      (this.configService.get<'lax' | 'strict' | 'none'>('auth.cookieSameSite') ?? 'lax');
     const cookieDomain = this.configService.get<string | undefined>('auth.cookieDomain');
 
     return {
