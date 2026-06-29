@@ -84,7 +84,31 @@ export class StorageService {
 
     const bucket = this.configService.get<string>('storage.supabaseStorageBucket')!;
     const storage = this.getSupabaseClient().storage.from(bucket);
-    const { data, error } = await storage.createSignedUploadUrl(storageKey);
+
+    let data: { signedUrl: string; token: string; path: string } | null = null;
+    let error: { message: string; name?: string } | null = null;
+
+    try {
+      const result = await storage.createSignedUploadUrl(storageKey);
+      data = result.data;
+      error = result.error;
+    } catch (e: unknown) {
+      const err = e as Error;
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          event: 'supabase_upload_exception',
+          bucket,
+          storageKey,
+          errorMessage: err.message,
+          errorStack: err.stack?.split('\n').slice(0, 3).join(' | '),
+          timestamp: new Date().toISOString(),
+        }),
+      );
+      throw new InternalServerErrorException(
+        `Supabase upload failed: ${err.message}`,
+      );
+    }
 
     if (error || !data) {
       console.error(
@@ -94,7 +118,7 @@ export class StorageService {
           bucket,
           storageKey,
           errorMessage: error?.message ?? 'No data returned',
-          errorName: (error as { name?: string })?.name ?? 'unknown',
+          errorName: error?.name ?? 'unknown',
           timestamp: new Date().toISOString(),
         }),
       );
@@ -134,13 +158,24 @@ export class StorageService {
   }
 
   private ensureSupabaseConfigured() {
-    const required = [
-      this.configService.get<string>('storage.supabaseUrl'),
-      this.configService.get<string>('storage.supabaseServiceRoleKey'),
-      this.configService.get<string>('storage.supabaseStorageBucket'),
-    ];
+    const supabaseUrl = this.configService.get<string>('storage.supabaseUrl');
+    const supabaseKey = this.configService.get<string>('storage.supabaseServiceRoleKey');
+    const bucket = this.configService.get<string>('storage.supabaseStorageBucket');
+
+    const required = [supabaseUrl, supabaseKey, bucket];
 
     if (required.some((value) => !value)) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          event: 'supabase_config_missing',
+          hasUrl: !!supabaseUrl,
+          hasKey: !!supabaseKey,
+          hasBucket: !!bucket,
+          bucketValue: bucket ?? 'undefined',
+          timestamp: new Date().toISOString(),
+        }),
+      );
       throw new InternalServerErrorException(
         'Storage is not configured. Set Supabase Storage environment variables first.',
       );
