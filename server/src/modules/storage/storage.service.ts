@@ -87,6 +87,17 @@ export class StorageService {
     const { data, error } = await storage.createSignedUploadUrl(storageKey);
 
     if (error || !data) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          event: 'supabase_upload_target_failed',
+          bucket,
+          storageKey,
+          errorMessage: error?.message ?? 'No data returned',
+          errorName: (error as { name?: string })?.name ?? 'unknown',
+          timestamp: new Date().toISOString(),
+        }),
+      );
       throw new InternalServerErrorException(
         error?.message ?? 'Failed to create a Supabase signed upload URL.',
       );
