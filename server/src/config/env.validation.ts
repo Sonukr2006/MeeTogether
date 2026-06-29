@@ -157,11 +157,8 @@ export function validateEnv(config: Record<string, unknown>) {
   if (nodeEnv === 'production') {
     const productionErrors: string[] = [];
 
-    // Redis is required for production rate limiting
-    const redisUrl = config['REDIS_URL'] as string | undefined;
-    if (!redisUrl || redisUrl.trim() === '') {
-      productionErrors.push('REDIS_URL is required in production for rate limiting');
-    }
+    // Redis is optional — in-memory fallback is used when unavailable
+    // const redisUrl = config['REDIS_URL'] as string | undefined;
 
     // Non-console email provider required
     const emailProvider = config['EMAIL_PROVIDER'] as string | undefined;

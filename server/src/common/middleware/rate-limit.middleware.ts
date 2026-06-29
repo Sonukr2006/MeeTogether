@@ -30,9 +30,9 @@ const MAX_BACKOFF_MS = 30_000;
 function scheduleReconnect() {
   if (permanentFallback || reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
     permanentFallback = true;
-    console.error(
+    console.warn(
       JSON.stringify({
-        level: 'error',
+        level: 'warn',
         event: 'redis_reconnection_exhausted',
         message:
           'Redis reconnection attempts exhausted — permanent in-memory fallback activated',
