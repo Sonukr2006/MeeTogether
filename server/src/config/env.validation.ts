@@ -153,9 +153,8 @@ export function validateEnv(config: Record<string, unknown>) {
   // Additional production-only checks
   const nodeEnv = (config['NODE_ENV'] as string) ?? process.env.NODE_ENV ?? 'development';
   const cookieDomain = (config['AUTH_COOKIE_DOMAIN'] as string) ?? process.env.AUTH_COOKIE_DOMAIN;
-  if (nodeEnv === 'production' && (!cookieDomain || cookieDomain.trim() === '')) {
-    throw new Error('AUTH_COOKIE_DOMAIN must be set in production to ensure cookies are scoped correctly');
-  }
+  // AUTH_COOKIE_DOMAIN is optional — when frontend and backend are on different domains,
+  // cookies default to the backend's own domain which is correct behavior.
 
   // Additional production-only checks
   if (nodeEnv === 'production') {
