@@ -42,6 +42,7 @@ export class StorageService implements OnModuleInit {
     try {
       const client = createClient(url, key, {
         auth: { persistSession: false, autoRefreshToken: false },
+        realtime: { params: { eventsPerSecond: 0 } },
       });
       const { data, error } = await client.storage.listBuckets();
       if (error) {
@@ -239,6 +240,12 @@ export class StorageService implements OnModuleInit {
           auth: {
             persistSession: false,
             autoRefreshToken: false,
+          },
+          realtime: {
+            params: { eventsPerSecond: 0 },
+          },
+          global: {
+            headers: { 'X-Client-Info': 'meetogether-server' },
           },
         },
       );
