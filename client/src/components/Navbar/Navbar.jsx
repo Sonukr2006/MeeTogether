@@ -51,14 +51,23 @@ const Navbar = () => {
     setIsCreateMenuOpen(false);
   };
 
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+  
     try {
       await dispatch(logOutUser()).unwrap();
       showAlert("Signed out successfully.", "success");
       setIsMobileMenuOpen(false);
       setIsLogoutConfirmOpen(false);
     } catch (error) {
-      showAlert(error.message || "Sign out failed.", "error");
+      const message =
+        error?.message || error?.payload?.message || "Sign out failed.";
+      showAlert(message, "error");
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
