@@ -3,7 +3,9 @@ import {
   ForbiddenException,
   Injectable,
   InternalServerErrorException,
+  Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { ConfigService } from '@nestjs/config';
@@ -15,7 +17,8 @@ import { CreateUploadTargetDto } from './dto/create-upload-target.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
-export class StorageService {
+export class StorageService implements OnModuleInit {
+  private readonly logger = new Logger(StorageService.name);
   private s3Client: S3Client | null = null;
   private supabaseClient: SupabaseClient | null = null;
 
@@ -23,6 +26,37 @@ export class StorageService {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {}
+
+  async onModuleInit() {
+    const provider = this.configService.get<string>('storage.provider') ?? 'supabase';
+    if (provider !== 'supabase') return;
+
+    const url = this.configService.get<string>('storage.supabaseUrl');
+    const key = this.configService.get<string>('storage.supabaseServiceRoleKey');
+    const bucket = this.configService.get<string>('storage.supabaseStorageBucket');
+
+    this.logger.log(`Supabase storage config: url=${url ? 'SET' : 'MISSING'}, key=${key ? key.substring(0, 12) + '...' : 'MISSING'}, bucket=${bucket ?? 'MISSING'}`);
+
+    if (!url || !key || !bucket) return;
+
+    try {
+      const client = createClient(url, key, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const { data, error } = await client.storage.listBuckets();
+      if (error) {
+        this.logger.error(`Supabase health check FAILED: ${error.message}`);
+      } else {
+        const bucketNames = data?.map((b) => b.name) ?? [];
+        this.logger.log(`Supabase health check OK. Buckets: [${bucketNames.join(', ')}]`);
+        if (!bucketNames.includes(bucket)) {
+          this.logger.error(`Bucket "${bucket}" NOT FOUND in Supabase. Available: [${bucketNames.join(', ')}]`);
+        }
+      }
+    } catch (e: unknown) {
+      this.logger.error(`Supabase health check exception: ${(e as Error).message}`);
+    }
+  }
 
   async createUploadTarget(
     user: AuthenticatedUser,
