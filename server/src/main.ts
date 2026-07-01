@@ -6,6 +6,7 @@ import * as Sentry from '@sentry/node';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import WebSocket from 'ws';
 import {
   createRateLimitMiddleware,
   initializeRateLimitStore,
@@ -14,6 +15,11 @@ import { requestContextMiddleware } from './common/middleware/request-context.mi
 import { pinoHttpOptions } from './common/logger/pino.config';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+
+// Polyfill WebSocket for Node.js 20 (required by Supabase SDK)
+if (!(globalThis as unknown as Record<string, unknown>).WebSocket) {
+  (globalThis as unknown as Record<string, unknown>).WebSocket = WebSocket;
+}
 
 // Initialize Sentry before everything else
 const sentryDsn = process.env.SENTRY_DSN;
