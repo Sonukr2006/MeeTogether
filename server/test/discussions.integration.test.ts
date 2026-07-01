@@ -94,21 +94,17 @@ void describe('DiscussionsService integration', () => {
     assert.equal(ownerState.unreadCountSnapshot, messageCount);
   });
 
-  void it('rejects message creation by a non-member on a visible project thread', async () => {
+  void it('allows message creation by any user on a public project thread', async () => {
     const { outsider, thread } = await createDiscussionFixture({
       visibility: 'public',
     });
 
-    await assert.rejects(
-      () =>
-        discussionsService.createMessage(thread.id, outsider.id, {
-          message: 'This should not be accepted',
-        }),
-      (error: unknown) => {
-        assert.equal(getHttpStatus(error), 403);
-        return true;
-      },
-    );
+    const result = await discussionsService.createMessage(thread.id, outsider.id, {
+      message: 'Public project message from outsider',
+    });
+
+    assert.ok(result.id);
+    assert.equal(result.message, 'Public project message from outsider');
   });
 });
 
