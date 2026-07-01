@@ -35,6 +35,7 @@ const Discussions = () => {
   );
   const [sendError, setSendError] = useState("");
   const composerRef = useRef(null);
+  const messagesEndRef = useRef(null);
   const projectIdParam = searchParams.get("projectId");
   const currentUser = useSelector((state) => state.auth.currentUser);
   const accessToken = useSelector((state) => state.auth.accessToken);
@@ -104,6 +105,10 @@ const Discussions = () => {
     textarea.style.height = "0px";
     textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
   }, [messageText]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [selectedMessageList]);
 
   const formatActivityTime = (value) => {
     if (!value) {
@@ -814,7 +819,7 @@ const Discussions = () => {
               ) : null}
 
               <div className="flex min-h-0 flex-col">
-                <div className="min-h-0 flex-1 bg-slate-50/70 px-3 py-4 dark:bg-[#313338]">
+                <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/70 px-3 py-4 dark:bg-[#313338]" id="discussion-messages-container">
                   <div className="w-full">
                     <div className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
                       <span className="h-px flex-1 bg-slate-200 dark:bg-slate-800" />
@@ -906,6 +911,7 @@ const Discussions = () => {
                         </div>
                       </div>
                     )}
+                    <div ref={messagesEndRef} />
                   </div>
                 </div>
 
