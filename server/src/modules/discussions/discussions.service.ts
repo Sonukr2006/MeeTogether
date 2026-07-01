@@ -437,7 +437,8 @@ export class DiscussionsService {
     return (
       thread.createdByUserId === userId ||
       thread.project.ownerUserId === userId ||
-      thread.project.members.length > 0
+      thread.project.members.length > 0 ||
+      thread.project.visibility === 'public'
     );
   }
 
