@@ -21,7 +21,7 @@ const ForgotPassword = lazy(() => import('./components/Auth/ForgotPassword.jsx')
 const ResetPassword = lazy(() => import('./components/Auth/ResetPassword.jsx'))
 const VerifyEmail = lazy(() => import('./components/Auth/VerifyEmail.jsx'))
 const Profile = lazy(() => import('./components/Profile/Profile.jsx'))
-const Home = lazy(() => import('./components/Home/Home.jsx'))
+const LandingOrHome = lazy(() => import('./components/Landing/LandingOrHome.jsx'))
 const ProjectRoom = lazy(() => import('./components/Project/ProjectRoom.jsx'))
 const Requests = lazy(() => import('./components/Requests/Requests.jsx'))
 const Resume = lazy(() => import('./components/Resume/Resume.jsx'))
@@ -47,6 +47,14 @@ const router = createBrowserRouter([
     path: '/',
     element: <App />,
     children : [
+      {
+        index: true,
+        element: withSuspense(
+          <LandingOrHome />,
+          'Loading',
+          'Preparing your experience.',
+        ),
+      },
       {
         element: <GuestOnlyRoute />,
         children: [
@@ -95,14 +103,6 @@ const router = createBrowserRouter([
       {
         element: <RequireAuth />,
         children: [
-          {
-            path: '/',
-            element: withSuspense(
-              <Home />,
-              'Loading the build feed',
-              'We’re getting the latest proof-of-work ready.',
-            ),
-          },
           {
             path: '/discussions',
             element: withSuspense(
