@@ -211,19 +211,3 @@ async function createTestUser(role: string) {
   createdUserIds.add(user.id);
   return user;
 }
-
-function getHttpStatus(error: unknown) {
-  if (hasHttpStatus(error)) {
-    return error.getStatus();
-  }
-
-  return undefined;
-}
-
-function hasHttpStatus(error: unknown): error is { getStatus: () => number } {
-  if (!error || typeof error !== 'object') {
-    return false;
-  }
-
-  return typeof (error as { getStatus?: unknown }).getStatus === 'function';
-}
